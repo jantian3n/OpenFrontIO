@@ -284,6 +284,30 @@ describe("PlayerImpl", () => {
       expect(other.gold() - subjectGold).toBe(900n);
     });
 
+    test("an aggressor subject cannot invoke protection against retaliation", () => {
+      makePlayerDominant();
+      expect(other.requestProtection(player)).toBe(true);
+      expect(player.acceptSubjectRequest(other, "protection")).toBe(true);
+
+      const attackerInfo = new PlayerInfo(
+        "attacker",
+        PlayerType.Human,
+        null,
+        "attacker_id",
+      );
+      game.addPlayer(attackerInfo);
+      const attacker = game.player("attacker_id");
+      attacker.conquer(game.ref(40, 40));
+
+      other.recordAggressionAgainst(attacker);
+      expect(other.raiseProtectionCall(attacker)).toBe(false);
+      expect(player.incomingProtectionCalls()).toHaveLength(0);
+
+      (game as any)._ticks += 600;
+      expect(other.raiseProtectionCall(attacker)).toBe(true);
+      expect(player.incomingProtectionCalls()).toHaveLength(1);
+    });
+
     test("declining a protection call raises subject autonomy", () => {
       makePlayerDominant();
       expect(other.requestProtection(player)).toBe(true);
@@ -303,6 +327,38 @@ describe("PlayerImpl", () => {
       expect(player.incomingProtectionCalls()).toHaveLength(1);
       expect(player.respondToProtectionCall(other, attacker, false)).toBe(true);
       expect(player.incomingProtectionCalls()).toHaveLength(0);
+      expect(other.subjectInfo()?.autonomy).toBe(70);
+    });
+
+    test("multiple refusals in one crisis do not stack autonomy instantly", () => {
+      makePlayerDominant();
+      expect(other.requestProtection(player)).toBe(true);
+      expect(player.acceptSubjectRequest(other, "protection")).toBe(true);
+
+      const attackerAInfo = new PlayerInfo(
+        "attackerA",
+        PlayerType.Human,
+        null,
+        "attacker_a",
+      );
+      const attackerBInfo = new PlayerInfo(
+        "attackerB",
+        PlayerType.Human,
+        null,
+        "attacker_b",
+      );
+      game.addPlayer(attackerAInfo);
+      game.addPlayer(attackerBInfo);
+      const attackerA = game.player("attacker_a");
+      const attackerB = game.player("attacker_b");
+      attackerA.conquer(game.ref(40, 40));
+      attackerB.conquer(game.ref(45, 45));
+
+      expect(other.raiseProtectionCall(attackerA)).toBe(true);
+      expect(other.raiseProtectionCall(attackerB)).toBe(true);
+      expect(player.respondToProtectionCall(other, attackerA, false)).toBe(true);
+      expect(player.respondToProtectionCall(other, attackerB, false)).toBe(true);
+
       expect(other.subjectInfo()?.autonomy).toBe(70);
     });
 
