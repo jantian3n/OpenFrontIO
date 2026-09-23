@@ -1296,15 +1296,49 @@ export class PlayerImpl implements Player {
     return `${subject.id()}|${attacker.id()}`;
   }
 
-  private pruneExpiredProtectionCalls(): void {
-    const duration = this.mg.config().allianceRequestDuration();
-    this._pendingProtectionCalls = this._pendingProtectionCalls.filter(
-      (call) => this.mg.ticks() - call.createdAt() < duration,
+  private applyProtectionDecline(subject: PlayerImpl): void {
+    if (subject._subjectInfo === null) return;
+    const autonomyGain =
+      subject._subjectInfo.kind === SubjectRelationKind.Protectorate ? 10 : 5;
+    subject._subjectInfo.autonomy = Math.min(
+      100,
+      subject._subjectInfo.autonomy + autonomyGain,
     );
   }
 
+  private expireProtectionCalls(): void {
+    const duration = this.mg.config().allianceRequestDuration();
+    const active: ProtectionCallRecord[] = [];
+
+    for (const call of this._pendingProtectionCalls) {
+      if (this.mg.ticks() - call.createdAt() < duration) {
+        active.push(call);
+        continue;
+      }
+
+      const subject = call.subject() as PlayerImpl;
+      if (subject.isSubjectOf(this)) {
+        this.applyProtectionDecline(subject);
+      }
+
+      this.mg.addUpdate({
+        type: GameUpdateType.ProtectionCallReply,
+        call: {
+          type: GameUpdateType.ProtectionCall,
+          overlordID: this.smallID(),
+          subjectID: call.subject().smallID(),
+          attackerID: call.attacker().smallID(),
+          createdAt: call.createdAt(),
+        },
+        intervened: false,
+      });
+    }
+
+    this._pendingProtectionCalls = active;
+  }
+
   incomingProtectionCalls(): ProtectionCall[] {
-    this.pruneExpiredProtectionCalls();
+    this.expireProtectionCalls();
     return [...this._pendingProtectionCalls];
   }
 
@@ -1321,7 +1355,7 @@ export class PlayerImpl implements Player {
     }
 
     const overlord = this._overlord as PlayerImpl;
-    overlord.pruneExpiredProtectionCalls();
+    overlord.expireProtectionCalls();
 
     const key = overlord.protectionCallKey(this, attacker);
     const last = overlord._lastProtectionCallTick.get(key);
@@ -1350,7 +1384,7 @@ export class PlayerImpl implements Player {
     attacker: Player,
     intervene: boolean,
   ): boolean {
-    this.pruneExpiredProtectionCalls();
+    this.expireProtectionCalls();
     const callIndex = this._pendingProtectionCalls.findIndex(
       (call) => call.subject() === subject && call.attacker() === attacker,
     );
@@ -1381,15 +1415,8 @@ export class PlayerImpl implements Player {
           subjectImpl._subjectInfo.autonomy - 2,
         );
       }
-    } else if (subjectImpl._subjectInfo !== null) {
-      const autonomyPenalty =
-        subjectImpl._subjectInfo.kind === SubjectRelationKind.Protectorate
-          ? 10
-          : 5;
-      subjectImpl._subjectInfo.autonomy = Math.min(
-        100,
-        subjectImpl._subjectInfo.autonomy + autonomyPenalty,
-      );
+    } else {
+      this.applyProtectionDecline(subjectImpl);
     }
 
     this.mg.addUpdate({
@@ -1415,6 +1442,10 @@ export class PlayerImpl implements Player {
   }
 
   processSubjectRelationTick(): void {
+    // Overlords must resolve ignored protection calls too; expiration counts
+    // as refusing the obligation and therefore raises subject autonomy.
+    this.expireProtectionCalls();
+
     if (this._overlord === null || this._subjectInfo === null) return;
 
     const now = this.mg.ticks();
