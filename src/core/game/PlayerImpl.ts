@@ -440,11 +440,13 @@ export class PlayerImpl implements Player {
       subjectCreatedAt: this._subjectInfo?.createdAt ?? null,
       autonomy: this._subjectInfo?.autonomy ?? null,
       tributeRate: this._subjectInfo?.tributeRate ?? null,
-      outgoingSubjectRequests: this.outgoingSubjectRequests().map((request) => ({
-        recipientID: request.recipient().id(),
-        requestType: request.requestType(),
-        createdAt: request.createdAt(),
-      })),
+      outgoingSubjectRequests: this.outgoingSubjectRequests().map(
+        (request) => ({
+          recipientID: request.recipient().id(),
+          requestType: request.requestType(),
+          createdAt: request.createdAt(),
+        }),
+      ),
       embargoes: embargoes,
       isTraitor: this.isTraitor(),
       traitorRemainingTicks: this.getTraitorRemainingTicks(),
@@ -1114,10 +1116,7 @@ export class PlayerImpl implements Player {
     if (subject.isDisconnected() || overlord.isDisconnected()) return false;
     if (subject.isSubject() || subject.subjects().length > 0) return false;
     if (overlord.isSubject()) return false;
-    if (
-      requirePeace &&
-      (subject as PlayerImpl).isActivelyFighting(overlord)
-    ) {
+    if (requirePeace && (subject as PlayerImpl).isActivelyFighting(overlord)) {
       return false;
     }
     return (subject as PlayerImpl).isMeaningfullyWeakerThan(overlord);
@@ -1326,10 +1325,7 @@ export class PlayerImpl implements Player {
     requestType: SubjectRequestType,
   ): boolean {
     const requestorImpl = requestor as PlayerImpl;
-    const request = requestorImpl.findOutgoingSubjectRequest(
-      this,
-      requestType,
-    );
+    const request = requestorImpl.findOutgoingSubjectRequest(this, requestType);
     if (request === undefined) return false;
 
     requestorImpl._outgoingSubjectRequests =
@@ -1498,7 +1494,9 @@ export class PlayerImpl implements Player {
     const autonomyGain =
       subject._subjectInfo.kind === SubjectRelationKind.Protectorate ? 10 : 5;
     const relationLoss =
-      subject._subjectInfo.kind === SubjectRelationKind.Protectorate ? -25 : -15;
+      subject._subjectInfo.kind === SubjectRelationKind.Protectorate
+        ? -25
+        : -15;
 
     subject._subjectInfo.autonomy = Math.min(
       100,
@@ -1846,9 +1844,9 @@ export class PlayerImpl implements Player {
 
     const overlordDesignatedEnemy =
       overlord.targets().includes(other) ||
-      overlord.outgoingAttacks().some(
-        (attack) => attack.isActive() && attack.target() === other,
-      );
+      overlord
+        .outgoingAttacks()
+        .some((attack) => attack.isActive() && attack.target() === other);
 
     return overlordDesignatedEnemy;
   }
@@ -2803,9 +2801,7 @@ export class PlayerImpl implements Player {
     if (player === this) return;
 
     const activeRetaliation = this.incomingAttacks().some(
-      (incoming) =>
-        incoming.isActive() &&
-        incoming.attacker() === player,
+      (incoming) => incoming.isActive() && incoming.attacker() === player,
     );
     const recentRetaliation = player.hasRecentAggressionAgainst(this);
 
