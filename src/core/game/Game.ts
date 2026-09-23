@@ -825,6 +825,8 @@ export interface Player {
   // Attacking.
   canAttack(tile: TileRef): boolean;
   canAttackPlayer(player: Player, treatAFKFriendly?: boolean): boolean;
+  recordAggressionAgainst(player: Player): void;
+  hasRecentAggressionAgainst(player: Player): boolean;
   isImmune(): boolean;
 
   createAttack(
