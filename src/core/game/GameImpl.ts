@@ -516,7 +516,6 @@ export class GameImpl implements Game {
       // Dead and unspawned players are skipped: an eliminated player's fall
       // to zero tiles would otherwise register as a total collapse.
       if (player.isAlive() && player.hasSpawned()) {
-        player.processSubjectRelationTick();
         this.stats().recordTickSample(
           player,
           player.numTilesOwned(),
