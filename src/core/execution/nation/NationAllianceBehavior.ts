@@ -167,8 +167,7 @@ export class NationAllianceBehavior {
       )
       .sort(
         (a, b) =>
-          this.game.config().maxTroops(b) -
-          this.game.config().maxTroops(a),
+          this.game.config().maxTroops(b) - this.game.config().maxTroops(a),
       );
 
     if (candidates.length === 0) return false;
