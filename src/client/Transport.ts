@@ -77,11 +77,15 @@ export class SendSubjectIntentEvent implements GameEvent {
       | "accept"
       | "reject"
       | "release"
+      | "request_independence"
       | "independence"
       | "intervene"
       | "decline_protection_call",
     public readonly target?: PlayerView,
-    public readonly requestType?: "protection" | "subjugation",
+    public readonly requestType?:
+      | "protection"
+      | "subjugation"
+      | "independence",
     public readonly subject?: PlayerView,
   ) {}
 }
