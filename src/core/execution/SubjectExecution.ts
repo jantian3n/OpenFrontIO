@@ -12,6 +12,7 @@ export type SubjectAction =
   | "accept"
   | "reject"
   | "release"
+  | "request_independence"
   | "independence"
   | "intervene"
   | "decline_protection_call";
@@ -85,6 +86,10 @@ export class SubjectExecution implements Execution {
       case "release":
         success =
           this.target !== null && this.player.releaseSubject(this.target);
+        break;
+      case "request_independence":
+        success =
+          this.target !== null && this.player.requestIndependence(this.target);
         break;
       case "independence":
         success = this.player.declareIndependence();
