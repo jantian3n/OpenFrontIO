@@ -151,6 +151,50 @@ describe("diffPlayerUpdate", () => {
     expect(diffPlayerUpdate(prev, next)).toBeNull();
   });
 
+  it("detects and applies subject relation metadata", () => {
+    const prev = makePlayerUpdate();
+    const next = makePlayerUpdate({
+      overlord: 7,
+      subjectKind: "protectorate",
+      subjectOrigin: "protection",
+      subjectCreatedAt: 123,
+      autonomy: 60,
+      tributeRate: 10,
+      outgoingSubjectRequests: [
+        {
+          recipientID: "player-b",
+          requestType: "protection",
+          createdAt: 123,
+        },
+      ],
+    });
+
+    const diff = diffPlayerUpdate(prev, next)!;
+    expect(diff.overlord).toBe(7);
+    expect(diff.subjectKind).toBe("protectorate");
+    expect(diff.subjectOrigin).toBe("protection");
+    expect(diff.subjectCreatedAt).toBe(123);
+    expect(diff.autonomy).toBe(60);
+    expect(diff.tributeRate).toBe(10);
+    expect(diff.outgoingSubjectRequests).toEqual(
+      next.outgoingSubjectRequests,
+    );
+
+    const state = makePlayerState();
+    applyStateUpdate(state, diff);
+    expect(state.overlord).toBe(7);
+    expect(state.subjectKind).toBe("protectorate");
+    expect(state.subjectOrigin).toBe("protection");
+    expect(state.autonomy).toBe(60);
+    expect(state.tributeRate).toBe(10);
+    expect(state.outgoingSubjectRequests).toEqual(
+      next.outgoingSubjectRequests,
+    );
+    expect(state.outgoingSubjectRequests).not.toBe(
+      next.outgoingSubjectRequests,
+    );
+  });
+
   it("detects allies array additions", () => {
     const prev = makePlayerUpdate({ allies: [2, 3] });
     const next = makePlayerUpdate({ allies: [2, 3, 4] });
