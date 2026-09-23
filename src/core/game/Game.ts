@@ -421,6 +421,28 @@ export interface Alliance {
   other(player: Player): Player;
 }
 
+export enum SubjectRelationKind {
+  Protectorate = "protectorate",
+  Puppet = "puppet",
+}
+
+export type SubjectRequestType = "protection" | "subjugation";
+
+export interface SubjectRelationInfo {
+  kind: SubjectRelationKind;
+  origin: SubjectRequestType;
+  createdAt: Tick;
+  autonomy: number;
+  tributeRate: number;
+}
+
+export interface SubjectRequest {
+  requestor(): Player;
+  recipient(): Player;
+  requestType(): SubjectRequestType;
+  createdAt(): Tick;
+}
+
 export interface MutableAlliance extends Alliance {
   expire(): void;
   other(player: Player): Player;
@@ -720,13 +742,39 @@ export interface Player {
   createAllianceRequest(recipient: Player): AllianceRequest | null;
   betrayals(): number;
 
-  // Puppet / subject diplomacy
+  // Subject diplomacy
   overlord(): Player | null;
   subjects(): Player[];
+  subjectInfo(): SubjectRelationInfo | null;
+  isSubject(): boolean;
+  isProtectorate(): boolean;
   isPuppet(): boolean;
+  isSubjectOf(other: Player): boolean;
   isPuppetOf(other: Player): boolean;
   isOverlordOf(other: Player): boolean;
+  isInSubjectRelation(other: Player): boolean;
   isInPuppetRelation(other: Player): boolean;
+  incomingSubjectRequests(): SubjectRequest[];
+  outgoingSubjectRequests(): SubjectRequest[];
+  isRequestingSubjectRelation(
+    other: Player,
+    requestType?: SubjectRequestType,
+  ): boolean;
+  canRequestProtection(other: Player): boolean;
+  canDemandSubjugation(other: Player): boolean;
+  requestProtection(other: Player): boolean;
+  demandSubjugation(other: Player): boolean;
+  acceptSubjectRequest(
+    requestor: Player,
+    requestType: SubjectRequestType,
+  ): boolean;
+  rejectSubjectRequest(
+    requestor: Player,
+    requestType: SubjectRequestType,
+  ): boolean;
+  releaseSubject(subject: Player): boolean;
+
+  // Backward-compatible V1 puppet helpers.
   outgoingPuppetRequests(): Player[];
   isRequestingPuppetOf(other: Player): boolean;
   canSendPuppetRequest(other: Player): boolean;
@@ -1031,10 +1079,10 @@ export interface PlayerInteraction {
   canSendEmoji: boolean;
   canSendAllianceRequest: boolean;
   canBreakAlliance: boolean;
-  canSendPuppetRequest: boolean;
-  canAcceptPuppetRequest: boolean;
-  canRejectPuppetRequest: boolean;
-  canReleasePuppet: boolean;
+  canRequestProtection: boolean;
+  canDemandSubjugation: boolean;
+  pendingSubjectRequest?: SubjectRequestType;
+  canReleaseSubject: boolean;
   canDeclareIndependence: boolean;
   canTarget: boolean;
   canDonateGold: boolean;
@@ -1069,6 +1117,7 @@ export enum MessageType {
   ALLIANCE_REQUEST,
   ALLIANCE_BROKEN,
   ALLIANCE_EXPIRED,
+  SUBJECT_REQUEST,
   DONATION_SENT,
   DONATION_RECEIVED,
   CHAT,
@@ -1104,6 +1153,7 @@ export const MESSAGE_TYPE_CATEGORIES: Record<MessageType, MessageCategory> = {
   [MessageType.ALLIANCE_REQUEST]: MessageCategory.ALLIANCE,
   [MessageType.ALLIANCE_BROKEN]: MessageCategory.ALLIANCE,
   [MessageType.ALLIANCE_EXPIRED]: MessageCategory.ALLIANCE,
+  [MessageType.SUBJECT_REQUEST]: MessageCategory.ALLIANCE,
   [MessageType.RENEW_ALLIANCE]: MessageCategory.ALLIANCE,
   [MessageType.DONATION_SENT]: MessageCategory.TRADE,
   [MessageType.DONATION_RECEIVED]: MessageCategory.TRADE,
