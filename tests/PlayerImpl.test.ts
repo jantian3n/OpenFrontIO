@@ -144,6 +144,51 @@ describe("PlayerImpl", () => {
     expect(other.canSendAllianceRequest(player)).toBe(false);
   });
 
+  describe("puppet diplomacy", () => {
+    test("request can be accepted and makes both players friendly", () => {
+      expect(player.requestPuppet(other)).toBe(true);
+      expect(player.isRequestingPuppetOf(other)).toBe(true);
+
+      expect(other.acceptPuppetRequest(player)).toBe(true);
+      expect(other.isPuppetOf(player)).toBe(true);
+      expect(player.isOverlordOf(other)).toBe(true);
+      expect(player.isFriendly(other)).toBe(true);
+      expect(other.isFriendly(player)).toBe(true);
+      expect(player.canTarget(other)).toBe(false);
+      expect(other.canTarget(player)).toBe(false);
+    });
+
+    test("request can be rejected", () => {
+      expect(player.requestPuppet(other)).toBe(true);
+      expect(other.rejectPuppetRequest(player)).toBe(true);
+      expect(player.isRequestingPuppetOf(other)).toBe(false);
+      expect(other.isPuppet()).toBe(false);
+    });
+
+    test("overlord can release a subject", () => {
+      expect(player.requestPuppet(other)).toBe(true);
+      expect(other.acceptPuppetRequest(player)).toBe(true);
+      expect(player.releasePuppet(other)).toBe(true);
+      expect(player.isOverlordOf(other)).toBe(false);
+      expect(other.overlord()).toBeNull();
+    });
+
+    test("subject can declare independence", () => {
+      expect(player.requestPuppet(other)).toBe(true);
+      expect(other.acceptPuppetRequest(player)).toBe(true);
+      expect(other.declareIndependence()).toBe(true);
+      expect(other.isPuppet()).toBe(false);
+      expect(player.isOverlordOf(other)).toBe(false);
+      expect(other.isFriendly(player)).toBe(false);
+    });
+
+    test("reciprocal demands are blocked while a request is pending", () => {
+      expect(player.requestPuppet(other)).toBe(true);
+      expect(other.canSendPuppetRequest(player)).toBe(false);
+      expect(other.requestPuppet(player)).toBe(false);
+    });
+  });
+
   describe("tiles()", () => {
     test("returns a live view that reflects later ownership changes", () => {
       const tiles = player.tiles();
