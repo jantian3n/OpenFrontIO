@@ -897,7 +897,6 @@
     "reject_subject_request": "拒绝",
     "release_subject": "解除从属关系",
     "declare_independence": "宣布独立",
-    "independence_requires_autonomy": "自主度达到80%后可独立",
     "overlord": "宗主国",
     "subjects": "附属国",
     "subject_status": "从属状态",
