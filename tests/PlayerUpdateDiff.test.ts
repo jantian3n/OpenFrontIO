@@ -55,6 +55,9 @@ describe("Player update diffing (toUpdate)", () => {
     expect(full!.name).toBe("charlie");
     expect(full!.smallID).toBe(charlie.smallID());
     expect(full!.allies).toEqual([]);
+    expect(full!.overlord).toBeNull();
+    expect(full!.subjects).toEqual([]);
+    expect(full!.outgoingPuppetRequests).toEqual([]);
     expect(full!.targets).toEqual([]);
     expect(full!.embargoes).toEqual(new Set());
     expect(full!.outgoingAttacks).toEqual([]);
@@ -234,6 +237,27 @@ describe("Player update diffing (toUpdate)", () => {
     const bobDiff = bob.toUpdate();
     expect(bobDiff).not.toBeNull();
     expect(bobDiff!.allies).toEqual([alice.smallID()]);
+  });
+
+  test("puppet relationships appear in player diffs", () => {
+    alice.toUpdate();
+    bob.toUpdate();
+
+    expect(alice.requestPuppet(bob)).toBe(true);
+    let aliceDiff = alice.toUpdate();
+    expect(aliceDiff).not.toBeNull();
+    expect(aliceDiff!.outgoingPuppetRequests).toEqual(["bob_id"]);
+
+    expect(bob.acceptPuppetRequest(alice)).toBe(true);
+
+    aliceDiff = alice.toUpdate();
+    expect(aliceDiff).not.toBeNull();
+    expect(aliceDiff!.subjects).toEqual([bob.smallID()]);
+    expect(aliceDiff!.outgoingPuppetRequests).toEqual([]);
+
+    const bobDiff = bob.toUpdate();
+    expect(bobDiff).not.toBeNull();
+    expect(bobDiff!.overlord).toBe(alice.smallID());
   });
 
   test("targeting a player appears in the diff", () => {
