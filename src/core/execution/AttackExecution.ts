@@ -112,18 +112,7 @@ export class AttackExecution implements Execution {
     }
 
     if (this.target.isPlayer()) {
-      const targetPlayer = this.target as Player;
-      const activeRetaliation = this._owner
-        .incomingAttacks()
-        .some(
-          (incoming) =>
-            incoming.isActive() && incoming.attacker() === targetPlayer,
-        );
-      const recentRetaliation =
-        targetPlayer.hasRecentAggressionAgainst(this._owner);
-      if (!activeRetaliation && !recentRetaliation) {
-        this._owner.recordAggressionAgainst(targetPlayer);
-      }
+      this._owner.registerHostileActionAgainst(this.target as Player);
     }
 
     this.startTroops ??= this.mg
