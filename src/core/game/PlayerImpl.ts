@@ -1361,23 +1361,44 @@ export class PlayerImpl implements Player {
     const active: ProtectionCallRecord[] = [];
 
     for (const call of this._pendingProtectionCalls) {
+      const subject = call.subject() as PlayerImpl;
+      const attacker = call.attacker();
+      const noLongerValid =
+        !subject.isSubjectOf(this) ||
+        !subject.isAlive() ||
+        !attacker.isAlive() ||
+        subject.isFriendly(attacker);
+
+      if (noLongerValid) {
+        this.mg.addUpdate({
+          type: GameUpdateType.ProtectionCallReply,
+          call: {
+            type: GameUpdateType.ProtectionCall,
+            overlordID: this.smallID(),
+            subjectID: subject.smallID(),
+            attackerID: attacker.smallID(),
+            createdAt: call.createdAt(),
+          },
+          intervened: false,
+          cancelled: true,
+        });
+        continue;
+      }
+
       if (this.mg.ticks() - call.createdAt() < duration) {
         active.push(call);
         continue;
       }
 
-      const subject = call.subject() as PlayerImpl;
-      if (subject.isSubjectOf(this)) {
-        this.applyProtectionDecline(subject);
-      }
+      this.applyProtectionDecline(subject);
 
       this.mg.addUpdate({
         type: GameUpdateType.ProtectionCallReply,
         call: {
           type: GameUpdateType.ProtectionCall,
           overlordID: this.smallID(),
-          subjectID: call.subject().smallID(),
-          attackerID: call.attacker().smallID(),
+          subjectID: subject.smallID(),
+          attackerID: attacker.smallID(),
           createdAt: call.createdAt(),
         },
         intervened: false,
@@ -1458,6 +1479,22 @@ export class PlayerImpl implements Player {
 
     const [call] = this._pendingProtectionCalls.splice(callIndex, 1);
     const subjectImpl = subject as PlayerImpl;
+
+    if (!attacker.isAlive() || subject.isFriendly(attacker)) {
+      this.mg.addUpdate({
+        type: GameUpdateType.ProtectionCallReply,
+        call: {
+          type: GameUpdateType.ProtectionCall,
+          overlordID: this.smallID(),
+          subjectID: subject.smallID(),
+          attackerID: attacker.smallID(),
+          createdAt: call.createdAt(),
+        },
+        intervened: false,
+        cancelled: true,
+      });
+      return true;
+    }
 
     if (intervene) {
       const alliance = this.allianceWith(attacker);
