@@ -474,6 +474,7 @@ export class EventsDisplay extends LitElement implements Controller {
   private onProtectionCallReplyEvent(update: ProtectionCallReplyUpdate) {
     const myPlayer = this.game.myPlayer();
     if (!myPlayer || update.call.subjectID !== myPlayer.smallID()) return;
+    if (update.cancelled) return;
 
     const overlord = this.game.playerBySmallID(
       update.call.overlordID,
