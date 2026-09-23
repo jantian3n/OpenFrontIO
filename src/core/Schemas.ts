@@ -39,6 +39,7 @@ export type Intent =
   | AllianceRejectIntent
   | AllianceExtensionIntent
   | BreakAllianceIntent
+  | PuppetIntent
   | TargetPlayerIntent
   | EmojiIntent
   | DonateGoldIntent
@@ -65,6 +66,7 @@ export type CancelBoatIntent = z.infer<typeof CancelBoatIntentSchema>;
 export type AllianceRequestIntent = z.infer<typeof AllianceRequestIntentSchema>;
 export type AllianceRejectIntent = z.infer<typeof AllianceRejectIntentSchema>;
 export type BreakAllianceIntent = z.infer<typeof BreakAllianceIntentSchema>;
+export type PuppetIntent = z.infer<typeof PuppetIntentSchema>;
 export type TargetPlayerIntent = z.infer<typeof TargetPlayerIntentSchema>;
 export type EmojiIntent = z.infer<typeof EmojiIntentSchema>;
 export type DonateGoldIntent = z.infer<typeof DonateGoldIntentSchema>;
@@ -650,6 +652,12 @@ export const BreakAllianceIntentSchema = z.object({
   recipient: MappedID,
 });
 
+export const PuppetIntentSchema = z.object({
+  type: z.literal("puppet"),
+  action: z.enum(["request", "accept", "reject", "release", "independence"]),
+  target: MappedID.optional(),
+});
+
 export const TargetPlayerIntentSchema = z.object({
   type: z.literal("targetPlayer"),
   target: MappedID,
@@ -773,6 +781,7 @@ export const IntentSchema = z.discriminatedUnion("type", [
   AllianceRequestIntentSchema,
   AllianceRejectIntentSchema,
   BreakAllianceIntentSchema,
+  PuppetIntentSchema,
   TargetPlayerIntentSchema,
   EmojiIntentSchema,
   DonateGoldIntentSchema,
