@@ -198,8 +198,24 @@ describe("PlayerImpl", () => {
       expect(player.isTraitor()).toBe(false);
     });
 
-    test("becoming a puppet clears pending alliance requests", () => {
+    test("becoming a puppet clears pending and existing alliances", () => {
       makePlayerDominant();
+
+      const thirdInfo = new PlayerInfo(
+        "third",
+        PlayerType.Human,
+        null,
+        "third_id",
+      );
+      game.addPlayer(thirdInfo);
+      const third = game.player("third_id");
+      third.conquer(game.ref(40, 40));
+
+      const existing = other.createAllianceRequest(third);
+      expect(existing).not.toBeNull();
+      existing!.accept();
+      expect(other.isAlliedWith(third)).toBe(true);
+
       const pending = other.createAllianceRequest(player);
       expect(pending).not.toBeNull();
       expect(other.outgoingAllianceRequests()).toHaveLength(1);
@@ -208,7 +224,65 @@ describe("PlayerImpl", () => {
       expect(other.acceptSubjectRequest(player, "subjugation")).toBe(true);
 
       expect(other.outgoingAllianceRequests()).toHaveLength(0);
+      expect(other.alliances()).toHaveLength(0);
+      expect(other.isAlliedWith(third)).toBe(false);
       expect(other.isPuppet()).toBe(true);
+      expect(other.canSendAllianceRequest(third)).toBe(false);
+    });
+
+    test("puppet cannot start an independent offensive war", () => {
+      makePlayerDominant();
+
+      const thirdInfo = new PlayerInfo(
+        "third",
+        PlayerType.Bot,
+        null,
+        "third_id",
+      );
+      game.addPlayer(thirdInfo);
+      const third = game.player("third_id");
+      third.conquer(game.ref(40, 40));
+
+      expect(player.demandSubjugation(other)).toBe(true);
+      expect(other.acceptSubjectRequest(player, "subjugation")).toBe(true);
+
+      expect(other.canTarget(third)).toBe(false);
+      expect(other.canAttackPlayer(third)).toBe(false);
+    });
+
+    test("puppet can defend itself and follow an overlord-designated enemy", () => {
+      makePlayerDominant();
+
+      const defensiveInfo = new PlayerInfo(
+        "defensiveEnemy",
+        PlayerType.Bot,
+        null,
+        "defensive_enemy",
+      );
+      const overlordEnemyInfo = new PlayerInfo(
+        "overlordEnemy",
+        PlayerType.Bot,
+        null,
+        "overlord_enemy",
+      );
+      game.addPlayer(defensiveInfo);
+      game.addPlayer(overlordEnemyInfo);
+      const defensiveEnemy = game.player("defensive_enemy");
+      const overlordEnemy = game.player("overlord_enemy");
+      defensiveEnemy.conquer(game.ref(40, 40));
+      overlordEnemy.conquer(game.ref(45, 45));
+
+      expect(player.demandSubjugation(other)).toBe(true);
+      expect(other.acceptSubjectRequest(player, "subjugation")).toBe(true);
+
+      defensiveEnemy.recordAggressionAgainst(other);
+      expect(other.canTarget(defensiveEnemy)).toBe(true);
+      expect(other.canAttackPlayer(defensiveEnemy)).toBe(true);
+
+      expect(player.canTarget(overlordEnemy)).toBe(true);
+      player.target(overlordEnemy);
+      expect(other.canTarget(overlordEnemy)).toBe(true);
+      expect(other.canAttackPlayer(overlordEnemy)).toBe(true);
     });
 
     test("weak player can seek protection from a stronger player", () => {
