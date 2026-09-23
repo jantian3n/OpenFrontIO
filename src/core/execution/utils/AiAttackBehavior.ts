@@ -106,6 +106,9 @@ export class AiAttackBehavior {
         return;
       }
 
+      if (this.allianceBehavior.maybeSeekProtection(borderingEnemies)) {
+        return;
+      }
       this.allianceBehavior.maybeSendAllianceRequests(borderingEnemies);
     }
 
