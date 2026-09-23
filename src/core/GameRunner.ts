@@ -270,7 +270,9 @@ export class GameRunner {
         canDeclareIndependence: player.isPuppetOf(other),
         canDonateGold: player.canDonateGold(other),
         canDonateTroops: player.canDonateTroops(other),
-        canEmbargo: !player.hasEmbargoAgainst(other),
+        canEmbargo:
+          !player.hasEmbargoAgainst(other) &&
+          !player.isInPuppetRelation(other),
         allianceInfo: player.allianceInfo(other) ?? undefined,
       };
     }
