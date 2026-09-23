@@ -779,6 +779,11 @@
     "renew_alliance": "Request to renew",
     "request_alliance": "{name} requests an alliance!",
     "request_protection": "{name} seeks your protection.",
+    "protection_call": "{subject} is under attack by {attacker}. Your protection guarantee has been invoked.",
+    "intervene": "Intervene",
+    "decline_intervention": "Do Not Intervene",
+    "protection_intervened": "{overlord} honored the protection guarantee and intervened against {attacker}.",
+    "protection_declined": "{overlord} declined to intervene against {attacker}.",
     "retreating": "retreating",
     "sent_emoji": "Sent {name}: {emoji}",
     "sent_gold_to_player": "Sent {gold} gold to {name}",
@@ -1603,6 +1608,7 @@
     "break_alliance": "Break Alliance",
     "chat": "Chat",
     "declare_independence": "Declare Independence",
+    "independence_requires_autonomy": "Independence at 80% Autonomy",
     "demand_subjugation": "Demand Subjugation",
     "emotes": "Emojis",
     "flip_rocket_trajectory": "Flip rocket trajectory",
@@ -1639,7 +1645,7 @@
     "target": "Target",
     "trading": "Trading",
     "traitor": "Traitor",
-    "tribute_rate": "Tribute (Planned)",
+    "tribute_rate": "Tribute Rate",
     "troops": "Troops"
   },
   "player_profile": {
