@@ -334,6 +334,7 @@ export interface ProtectionCallReplyUpdate {
   type: GameUpdateType.ProtectionCallReply;
   call: ProtectionCallUpdate;
   intervened: boolean;
+  cancelled?: boolean;
 }
 
 export interface AllianceRequestUpdate {
