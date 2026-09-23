@@ -69,6 +69,18 @@ export class SendBreakAllianceIntentEvent implements GameEvent {
   ) {}
 }
 
+export class SendPuppetIntentEvent implements GameEvent {
+  constructor(
+    public readonly action:
+      | "request"
+      | "accept"
+      | "reject"
+      | "release"
+      | "independence",
+    public readonly target?: PlayerView,
+  ) {}
+}
+
 export class SendUpgradeStructureIntentEvent implements GameEvent {
   constructor(
     public readonly unitId: number,
@@ -292,6 +304,7 @@ export class Transport {
     this.subscribe(SendBreakAllianceIntentEvent, (e) =>
       this.onBreakAllianceRequestUIEvent(e),
     );
+    this.subscribe(SendPuppetIntentEvent, (e) => this.onSendPuppetIntent(e));
     this.subscribe(SendSpawnIntentEvent, (e) => this.onSendSpawnIntentEvent(e));
     this.subscribe(SendAttackIntentEvent, (e) => this.onSendAttackIntent(e));
     this.subscribe(SendUpgradeStructureIntentEvent, (e) =>
@@ -730,6 +743,14 @@ export class Transport {
     this.sendIntent({
       type: "breakAlliance",
       recipient: event.recipient.id(),
+    });
+  }
+
+  private onSendPuppetIntent(event: SendPuppetIntentEvent) {
+    this.sendIntent({
+      type: "puppet",
+      action: event.action,
+      target: event.target?.id(),
     });
   }
 
