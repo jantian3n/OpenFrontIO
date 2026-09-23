@@ -228,6 +228,7 @@ describe("PlayerImpl", () => {
       expect(other.isAlliedWith(third)).toBe(false);
       expect(other.isPuppet()).toBe(true);
       expect(other.canSendAllianceRequest(third)).toBe(false);
+      expect(other.createAllianceRequest(third)).toBeNull();
     });
 
     test("puppet cannot start an independent offensive war", () => {
