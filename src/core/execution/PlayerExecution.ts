@@ -764,6 +764,17 @@ export class PlayerExecution implements Execution {
       }
     });
 
+    // Subject relationships must not survive either side's elimination.
+    // Otherwise surviving protectorates/puppets can remain bound to a dead
+    // overlord, while overlords retain dead subjects indefinitely.
+    const overlord = this.player.overlord();
+    if (overlord !== null) {
+      overlord.releaseSubject(this.player);
+    }
+    for (const subject of this.player.subjects()) {
+      this.player.releaseSubject(subject);
+    }
+
     this.player.removeAllAlliances();
   }
 }

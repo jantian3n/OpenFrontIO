@@ -639,12 +639,29 @@ export class WarshipExecution implements Execution {
         // Warships don't need to reload when attacking transport ships.
         this.lastShellAttack = this.mg.ticks();
       }
+      const targetUnit = this.warship.targetUnit()!;
+      const attacker = this.warship.owner();
+      const defender = targetUnit.owner();
+
+      // A target can become friendly after the warship locked on (alliance,
+      // protectorate, puppet, same-team transition). Never keep firing a stale
+      // hostile target after diplomacy changes.
+      if (attacker !== defender && !attacker.canAttackPlayer(defender, true)) {
+        this.warship.setTargetUnit(undefined);
+        return;
+      }
+
+      if (attacker !== defender) {
+        attacker.registerHostileActionAgainst(defender);
+        defender.raiseProtectionCall(attacker);
+      }
+
       this.mg.addExecution(
         new ShellExecution(
           this.warship.tile(),
-          this.warship.owner(),
+          attacker,
           this.warship,
-          this.warship.targetUnit()!,
+          targetUnit,
         ),
       );
       if (!this.warship.targetUnit()!.hasHealth()) {

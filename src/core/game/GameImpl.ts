@@ -372,6 +372,10 @@ export class GameImpl implements Game {
     requestor: Player,
     recipient: Player,
   ): AllianceRequest | null {
+    if (!requestor.canSendAllianceRequest(recipient)) {
+      console.log("cannot request alliance under current diplomacy rules");
+      return null;
+    }
     if (requestor.isAlliedWith(recipient)) {
       console.log("cannot request alliance, already allied");
       return null;
@@ -405,6 +409,11 @@ export class GameImpl implements Game {
 
     const requestor = request.requestor();
     const recipient = request.recipient();
+
+    if (requestor.isPuppet() || recipient.isPuppet()) {
+      request.reject();
+      return;
+    }
 
     const existing = requestor.allianceWith(recipient);
     if (existing) {
@@ -516,6 +525,7 @@ export class GameImpl implements Game {
       // Dead and unspawned players are skipped: an eliminated player's fall
       // to zero tiles would otherwise register as a total collapse.
       if (player.isAlive() && player.hasSpawned()) {
+        player.processSubjectRelationTick();
         this.stats().recordTickSample(
           player,
           player.numTilesOwned(),
@@ -890,6 +900,23 @@ export class GameImpl implements Game {
       player1ID: alliance.requestor().smallID(),
       player2ID: alliance.recipient().smallID(),
     });
+  }
+
+  public rejectAllianceRequestsInvolving(player: Player): void {
+    const pending = this.allianceRequests.filter(
+      (request) =>
+        request.requestor() === player || request.recipient() === player,
+    );
+    for (const request of pending) {
+      this.rejectAllianceRequest(request);
+    }
+  }
+
+  public removeAllianceSilently(alliance: Alliance): void {
+    const duration = this._ticks - alliance.createdAt();
+    this.stats().allianceEnded(alliance.requestor(), duration, null);
+    this.stats().allianceEnded(alliance.recipient(), duration, null);
+    this.detachAlliance(alliance);
   }
 
   public removeAlliancesByPlayerSilently(player: Player): void {

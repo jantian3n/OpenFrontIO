@@ -101,6 +101,10 @@ export class TransportShipExecution implements Execution {
       return;
     }
 
+    if (this.target.isPlayer()) {
+      this.attacker.registerHostileActionAgainst(this.target as Player);
+    }
+
     this.troops ??= this.mg
       .config()
       .boatAttackAmount(this.attacker, this.target);
@@ -132,6 +136,10 @@ export class TransportShipExecution implements Execution {
       troops: this.troops,
       targetTile: this.dst,
     });
+
+    if (this.target.isPlayer()) {
+      (this.target as Player).raiseProtectionCall(this.attacker);
+    }
 
     const fullPath = this.pathFinder.findPath(this.src, this.dst) ?? [this.src];
     if (fullPath.length === 0 || fullPath[0] !== this.src) {

@@ -222,6 +222,13 @@ export class NukeExecution implements Execution {
         const target = this.mg.owner(this.dst);
         if (!target.isPlayer()) {
           // Ignore terra nullius
+        } else {
+          this.player.registerHostileActionAgainst(target);
+          target.raiseProtectionCall(this.player);
+        }
+
+        if (!target.isPlayer()) {
+          // No player notification for terra nullius.
         } else if (this.nukeType === UnitType.AtomBomb) {
           this.mg.displayIncomingUnit(
             this.nuke.id(),

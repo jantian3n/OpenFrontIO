@@ -39,6 +39,7 @@ export type Intent =
   | AllianceRejectIntent
   | AllianceExtensionIntent
   | BreakAllianceIntent
+  | SubjectIntent
   | TargetPlayerIntent
   | EmojiIntent
   | DonateGoldIntent
@@ -65,6 +66,7 @@ export type CancelBoatIntent = z.infer<typeof CancelBoatIntentSchema>;
 export type AllianceRequestIntent = z.infer<typeof AllianceRequestIntentSchema>;
 export type AllianceRejectIntent = z.infer<typeof AllianceRejectIntentSchema>;
 export type BreakAllianceIntent = z.infer<typeof BreakAllianceIntentSchema>;
+export type SubjectIntent = z.infer<typeof SubjectIntentSchema>;
 export type TargetPlayerIntent = z.infer<typeof TargetPlayerIntentSchema>;
 export type EmojiIntent = z.infer<typeof EmojiIntentSchema>;
 export type DonateGoldIntent = z.infer<typeof DonateGoldIntentSchema>;
@@ -650,6 +652,23 @@ export const BreakAllianceIntentSchema = z.object({
   recipient: MappedID,
 });
 
+export const SubjectIntentSchema = z.object({
+  type: z.literal("subject"),
+  action: z.enum([
+    "request_protection",
+    "demand_subjugation",
+    "accept",
+    "reject",
+    "release",
+    "independence",
+    "intervene",
+    "decline_protection_call",
+  ]),
+  target: MappedID.optional(),
+  subject: MappedID.optional(),
+  requestType: z.enum(["protection", "subjugation"]).optional(),
+});
+
 export const TargetPlayerIntentSchema = z.object({
   type: z.literal("targetPlayer"),
   target: MappedID,
@@ -773,6 +792,7 @@ export const IntentSchema = z.discriminatedUnion("type", [
   AllianceRequestIntentSchema,
   AllianceRejectIntentSchema,
   BreakAllianceIntentSchema,
+  SubjectIntentSchema,
   TargetPlayerIntentSchema,
   EmojiIntentSchema,
   DonateGoldIntentSchema,

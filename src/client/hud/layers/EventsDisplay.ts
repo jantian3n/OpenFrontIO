@@ -13,12 +13,17 @@ import {
   DonateEventUpdate,
   EmojiUpdate,
   GameUpdateType,
+  ProtectionCallReplyUpdate,
+  SubjectRequestReplyUpdate,
   TargetPlayerUpdate,
   UnitIncomingUpdate,
 } from "../../../core/game/GameUpdates";
 import { UserSettings } from "../../../core/game/UserSettings";
 import { Controller } from "../../Controller";
-import { SendAllianceRequestIntentEvent } from "../../Transport";
+import {
+  SendAllianceRequestIntentEvent,
+  SendSubjectIntentEvent,
+} from "../../Transport";
 
 import { onlyImages } from "../../../core/Util";
 import { GoToPlayerEvent, GoToUnitEvent } from "../../TransformHandler";
@@ -55,6 +60,8 @@ const TIER_1_TYPES: ReadonlySet<MessageType> = new Set([
   MessageType.ALLIANCE_REJECTED,
   MessageType.ALLIANCE_BROKEN,
   MessageType.RENEW_ALLIANCE,
+  MessageType.SUBJECT_REQUEST,
+  MessageType.PROTECTION_CALL,
   MessageType.CONQUERED_PLAYER,
   MessageType.CHAT,
   MessageType.DONATION_RECEIVED,
@@ -137,6 +144,14 @@ export class EventsDisplay extends LitElement implements Controller {
     [GameUpdateType.UnitIncoming, this.onUnitIncomingEvent.bind(this)],
     [GameUpdateType.AllianceExpired, this.onAllianceExpiredEvent.bind(this)],
     [GameUpdateType.DonateEvent, this.onDonateEvent.bind(this)],
+    [
+      GameUpdateType.SubjectRequestReply,
+      this.onSubjectRequestReplyEvent.bind(this),
+    ],
+    [
+      GameUpdateType.ProtectionCallReply,
+      this.onProtectionCallReplyEvent.bind(this),
+    ],
   ] as const;
 
   constructor() {
@@ -149,6 +164,37 @@ export class EventsDisplay extends LitElement implements Controller {
       SendAllianceRequestIntentEvent,
       this.onAllianceRequestSentConfirmation.bind(this),
     );
+    this.eventBus.on(
+      SendSubjectIntentEvent,
+      this.onSubjectRequestSentConfirmation.bind(this),
+    );
+  }
+
+  private onSubjectRequestSentConfirmation(e: SendSubjectIntentEvent) {
+    const myPlayer = this.game.myPlayer();
+    if (!myPlayer || !e.target) return;
+    if (
+      e.action !== "request_protection" &&
+      e.action !== "demand_subjugation"
+    ) {
+      return;
+    }
+
+    const description =
+      e.action === "request_protection"
+        ? translateText("events_display.protection_request_sent", {
+            name: e.target.displayName(),
+          })
+        : translateText("events_display.subjugation_demand_sent", {
+            name: e.target.displayName(),
+          });
+
+    this.addEvent({
+      description,
+      type: MessageType.SUBJECT_REQUEST,
+      createdAt: this.game.ticks(),
+      focusID: e.target.smallID(),
+    });
   }
 
   private onAllianceRequestSentConfirmation(e: SendAllianceRequestIntentEvent) {
@@ -386,6 +432,72 @@ export class EventsDisplay extends LitElement implements Controller {
         update.accepted ? "alliance-accepted" : "alliance-declined",
       ),
     );
+  }
+
+  private onSubjectRequestReplyEvent(update: SubjectRequestReplyUpdate) {
+    const myPlayer = this.game.myPlayer();
+    if (!myPlayer || update.request.requestorID !== myPlayer.smallID()) {
+      return;
+    }
+
+    const other = this.game.playerBySmallID(
+      update.request.recipientID,
+    ) as PlayerView;
+    let description: string;
+    if (update.request.requestType === "protection") {
+      description = update.accepted
+        ? translateText("events_display.protection_request_accepted", {
+            name: other.displayName(),
+          })
+        : translateText("events_display.protection_request_rejected", {
+            name: other.displayName(),
+          });
+    } else {
+      description = update.accepted
+        ? translateText("events_display.subjugation_demand_accepted", {
+            name: other.displayName(),
+          })
+        : translateText("events_display.subjugation_demand_rejected", {
+            name: other.displayName(),
+          });
+    }
+
+    this.addEvent({
+      description,
+      type: MessageType.SUBJECT_REQUEST,
+      highlight: true,
+      createdAt: this.game.ticks(),
+      focusID: other.smallID(),
+    });
+  }
+
+  private onProtectionCallReplyEvent(update: ProtectionCallReplyUpdate) {
+    const myPlayer = this.game.myPlayer();
+    if (!myPlayer || update.call.subjectID !== myPlayer.smallID()) return;
+    if (update.cancelled) return;
+
+    const overlord = this.game.playerBySmallID(
+      update.call.overlordID,
+    ) as PlayerView;
+    const attacker = this.game.playerBySmallID(
+      update.call.attackerID,
+    ) as PlayerView;
+
+    this.addEvent({
+      description: update.intervened
+        ? translateText("events_display.protection_intervened", {
+            overlord: overlord.displayName(),
+            attacker: attacker.displayName(),
+          })
+        : translateText("events_display.protection_declined", {
+            overlord: overlord.displayName(),
+            attacker: attacker.displayName(),
+          }),
+      type: MessageType.PROTECTION_CALL,
+      highlight: true,
+      createdAt: this.game.ticks(),
+      focusID: overlord.smallID(),
+    });
   }
 
   onBrokeAllianceEvent(update: BrokeAllianceUpdate) {

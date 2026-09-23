@@ -198,6 +198,8 @@ export class NationExecution implements Execution {
 
     this.emojiBehavior.maybeSendCasualEmoji();
     this.updateRelationsFromEmbargos();
+    this.allianceBehavior.handleProtectionCalls();
+    this.allianceBehavior.handleSubjectRequests();
     this.allianceBehavior.handleAllianceRequests();
     this.allianceBehavior.handleAllianceExtensionRequests();
     this.mirvBehavior.considerMIRV();

@@ -59,6 +59,7 @@ const my = {
   type: () => PlayerType.Human,
   clientID: () => "client-1",
   isLobbyCreator: () => false,
+  isInSubjectRelation: () => false,
 } as unknown as PlayerView;
 
 const other = {
@@ -68,6 +69,7 @@ const other = {
   type: () => PlayerType.Human,
   clientID: () => "client-2",
   isLobbyCreator: () => false,
+  isInSubjectRelation: () => false,
 } as unknown as PlayerView;
 
 function makeGame() {

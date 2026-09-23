@@ -33,8 +33,13 @@ import {
   PlayerInfo,
   PlayerProfile,
   PlayerType,
+  ProtectionCall,
   Relation,
   Structures,
+  SubjectRelationInfo,
+  SubjectRelationKind,
+  SubjectRequest,
+  SubjectRequestType,
   Team,
   TerraNullius,
   Tick,
@@ -56,6 +61,7 @@ import {
   GameUpdateType,
   PlayerUpdate,
 } from "./GameUpdates";
+import { SubjectRequestImpl } from "./SubjectRequestImpl";
 import { ReadonlyTileSet, TileSet } from "./TileSet";
 import {
   bumpTraversalGeneration,
@@ -81,6 +87,34 @@ class Donation {
     public readonly tick: Tick,
   ) {}
 }
+
+class ProtectionCallRecord implements ProtectionCall {
+  constructor(
+    private readonly subject_: Player,
+    private readonly attacker_: Player,
+    private readonly createdAt_: Tick,
+  ) {}
+
+  subject(): Player {
+    return this.subject_;
+  }
+
+  attacker(): Player {
+    return this.attacker_;
+  }
+
+  createdAt(): Tick {
+    return this.createdAt_;
+  }
+}
+
+const SUBJECT_TRIBUTE_INTERVAL_TICKS = 300;
+const SUBJECT_AUTONOMY_INTERVAL_TICKS = 600;
+const SUBJECT_INDEPENDENCE_AUTONOMY = 80;
+const SUBJECT_PROTECTION_OUTCOME_COOLDOWN_TICKS = 300;
+// A state that starts a conflict cannot immediately turn the opponent's
+// retaliation into a protection claim. Active attacks extend this implicitly.
+const PROTECTION_AGGRESSION_MEMORY_TICKS = 600;
 
 // Shared singletons for empty collections in toFullUpdate. Sharing
 // references lets diffPlayerUpdate's `a === b` fast paths skip structural
@@ -167,6 +201,19 @@ export class PlayerImpl implements Player {
   private sentDonations: Donation[] = [];
 
   private relations = new Map<Player, number>();
+
+  private _overlord: Player | null = null;
+  private _subjects: Player[] = [];
+  private _subjectInfo: SubjectRelationInfo | null = null;
+  private _outgoingSubjectRequests: SubjectRequestImpl[] = [];
+  private _lastSubjectRequestTick = new Map<PlayerID, Tick>();
+  private _pendingProtectionCalls: ProtectionCallRecord[] = [];
+  private _lastProtectionCallTick = new Map<string, Tick>();
+  private _lastAggressionTick = new Map<PlayerID, Tick>();
+  private _lastProtectionOutcomeTick: Tick = -1;
+  private _subjectLastGoldEarned: Gold = 0n;
+  private _lastSubjectEconomyTick: Tick = -1;
+  private _lastSubjectAutonomyTick: Tick = -1;
 
   private lastDeleteUnitTick: Tick = -1;
   private lastEmbargoAllTick: Tick = -1;
@@ -380,6 +427,21 @@ export class PlayerImpl implements Player {
       goldEarned: this._goldEarned,
       troops: this.troops(),
       allies: allies,
+      overlord: this._overlord?.smallID() ?? null,
+      subjects:
+        this._subjects.length === 0
+          ? EMPTY_NUMBER_ARRAY
+          : this._subjects.map((p) => p.smallID()),
+      subjectKind: this._subjectInfo?.kind ?? null,
+      subjectOrigin: this._subjectInfo?.origin ?? null,
+      subjectCreatedAt: this._subjectInfo?.createdAt ?? null,
+      autonomy: this._subjectInfo?.autonomy ?? null,
+      tributeRate: this._subjectInfo?.tributeRate ?? null,
+      outgoingSubjectRequests: this.outgoingSubjectRequests().map((request) => ({
+        recipientID: request.recipient().id(),
+        requestType: request.requestType(),
+        createdAt: request.createdAt(),
+      })),
       embargoes: embargoes,
       isTraitor: this.isTraitor(),
       traitorRemainingTicks: this.getTraitorRemainingTicks(),
@@ -797,6 +859,9 @@ export class PlayerImpl implements Player {
     if (this.mg.config().disableAlliances()) {
       return false;
     }
+    if (this.isPuppet() || other.isPuppet()) {
+      return false;
+    }
     if (other === this) {
       return false;
     }
@@ -910,9 +975,710 @@ export class PlayerImpl implements Player {
     return this._betrayalCount;
   }
 
+  overlord(): Player | null {
+    return this._overlord;
+  }
+
+  subjects(): Player[] {
+    return [...this._subjects];
+  }
+
+  subjectInfo(): SubjectRelationInfo | null {
+    return this._subjectInfo === null ? null : { ...this._subjectInfo };
+  }
+
+  isSubject(): boolean {
+    return this._overlord !== null;
+  }
+
+  isProtectorate(): boolean {
+    return (
+      this._overlord !== null &&
+      this._subjectInfo?.kind === SubjectRelationKind.Protectorate
+    );
+  }
+
+  isPuppet(): boolean {
+    return (
+      this._overlord !== null &&
+      this._subjectInfo?.kind === SubjectRelationKind.Puppet
+    );
+  }
+
+  isSubjectOf(other: Player): boolean {
+    return this._overlord === other;
+  }
+
+  isPuppetOf(other: Player): boolean {
+    return this.isPuppet() && this._overlord === other;
+  }
+
+  isOverlordOf(other: Player): boolean {
+    return this._subjects.includes(other);
+  }
+
+  isInSubjectRelation(other: Player): boolean {
+    return this.isSubjectOf(other) || this.isOverlordOf(other);
+  }
+
+  isInPuppetRelation(other: Player): boolean {
+    return (
+      this.isPuppetOf(other) ||
+      (this.isOverlordOf(other) && other.isPuppetOf(this))
+    );
+  }
+
+  private pruneExpiredSubjectRequests(): void {
+    const duration = this.mg.config().allianceRequestDuration();
+    this._outgoingSubjectRequests = this._outgoingSubjectRequests.filter(
+      (request) => this.mg.ticks() - request.createdAt() < duration,
+    );
+  }
+
+  outgoingSubjectRequests(): SubjectRequest[] {
+    this.pruneExpiredSubjectRequests();
+    return [...this._outgoingSubjectRequests];
+  }
+
+  incomingSubjectRequests(): SubjectRequest[] {
+    return this.mg
+      .players()
+      .flatMap((player) => player.outgoingSubjectRequests())
+      .filter((request) => request.recipient() === this);
+  }
+
+  isRequestingSubjectRelation(
+    other: Player,
+    requestType?: SubjectRequestType,
+  ): boolean {
+    return this._outgoingSubjectRequests.some(
+      (request) =>
+        request.recipient() === other &&
+        (requestType === undefined || request.requestType() === requestType),
+    );
+  }
+
+  private hasPendingSubjectRequestWith(other: Player): boolean {
+    return (
+      this.isRequestingSubjectRelation(other) ||
+      other.isRequestingSubjectRelation(this)
+    );
+  }
+
+  private isActivelyFighting(other: Player): boolean {
+    const attacks = (attacker: Player, target: Player) =>
+      attacker
+        .outgoingAttacks()
+        .some(
+          (attack) =>
+            attack.isActive() &&
+            attack.target().isPlayer() &&
+            attack.target() === target,
+        );
+    return attacks(this, other) || attacks(other, this);
+  }
+
+  private isMeaningfullyWeakerThan(other: Player): boolean {
+    const substantiallyLower = (mine: number, theirs: number) =>
+      theirs > 0 && mine < theirs && mine * 100 <= theirs * 70;
+
+    let weakerIndicators = 0;
+    if (substantiallyLower(this.troops(), other.troops())) {
+      weakerIndicators++;
+    }
+    if (
+      substantiallyLower(
+        this.mg.config().maxTroops(this),
+        this.mg.config().maxTroops(other),
+      )
+    ) {
+      weakerIndicators++;
+    }
+    if (substantiallyLower(this.numTilesOwned(), other.numTilesOwned())) {
+      weakerIndicators++;
+    }
+    return weakerIndicators >= 2;
+  }
+
+  private canFormSubjectRelation(
+    subject: Player,
+    overlord: Player,
+    requirePeace: boolean,
+  ): boolean {
+    if (subject === overlord || !subject.isAlive() || !overlord.isAlive()) {
+      return false;
+    }
+    if (subject.isDisconnected() || overlord.isDisconnected()) return false;
+    if (subject.isSubject() || subject.subjects().length > 0) return false;
+    if (overlord.isSubject()) return false;
+    if (
+      requirePeace &&
+      (subject as PlayerImpl).isActivelyFighting(overlord)
+    ) {
+      return false;
+    }
+    return (subject as PlayerImpl).isMeaningfullyWeakerThan(overlord);
+  }
+
+  private subjectRequestCooldownPassed(other: Player): boolean {
+    const last = this._lastSubjectRequestTick.get(other.id());
+    return (
+      last === undefined ||
+      this.mg.ticks() - last >= this.mg.config().allianceRequestCooldown()
+    );
+  }
+
+  canRequestProtection(other: Player): boolean {
+    if (!this.canFormSubjectRelation(this, other, true)) return false;
+    if (!this.subjectRequestCooldownPassed(other)) return false;
+    return !this.hasPendingSubjectRequestWith(other);
+  }
+
+  canDemandSubjugation(other: Player): boolean {
+    if (!this.canFormSubjectRelation(other, this, false)) return false;
+    if (!this.subjectRequestCooldownPassed(other)) return false;
+    return !this.hasPendingSubjectRequestWith(other);
+  }
+
+  private createSubjectRequest(
+    other: Player,
+    requestType: SubjectRequestType,
+  ): boolean {
+    const allowed =
+      requestType === "protection"
+        ? this.canRequestProtection(other)
+        : this.canDemandSubjugation(other);
+    if (!allowed) return false;
+
+    const request = new SubjectRequestImpl(
+      this,
+      other,
+      requestType,
+      this.mg.ticks(),
+    );
+    this._outgoingSubjectRequests.push(request);
+    this._lastSubjectRequestTick.set(other.id(), this.mg.ticks());
+    this.mg.addUpdate(request.toUpdate());
+    return true;
+  }
+
+  requestProtection(other: Player): boolean {
+    return this.createSubjectRequest(other, "protection");
+  }
+
+  demandSubjugation(other: Player): boolean {
+    return this.createSubjectRequest(other, "subjugation");
+  }
+
+  private findOutgoingSubjectRequest(
+    recipient: Player,
+    requestType: SubjectRequestType,
+  ): SubjectRequestImpl | undefined {
+    return this._outgoingSubjectRequests.find(
+      (request) =>
+        request.recipient() === recipient &&
+        request.requestType() === requestType,
+    );
+  }
+
+  private clearSubjectRequestsInvolving(...players: Player[]): void {
+    const affected = new Set(players);
+    for (const player of this.mg.players()) {
+      const impl = player as PlayerImpl;
+      impl._outgoingSubjectRequests = impl._outgoingSubjectRequests.filter(
+        (request) =>
+          !affected.has(request.requestor()) &&
+          !affected.has(request.recipient()),
+      );
+    }
+  }
+
+  private cancelDirectNukesBetween(a: Player, b: Player): void {
+    const nukeTypes = [
+      UnitType.AtomBomb,
+      UnitType.HydrogenBomb,
+      UnitType.MIRV,
+      UnitType.MIRVWarhead,
+    ];
+
+    for (const launcher of [a, b]) {
+      const other = launcher === a ? b : a;
+      for (const unit of launcher.units(nukeTypes)) {
+        if (!unit.isActive() || unit.reachedTarget()) continue;
+
+        const targetTile = unit.targetTile();
+        const directTarget =
+          unit.type() === UnitType.MIRV
+            ? (unit.targetPlayer() ??
+              (targetTile !== undefined ? this.mg.owner(targetTile) : null))
+            : targetTile !== undefined
+              ? this.mg.owner(targetTile)
+              : null;
+
+        if (directTarget === other) {
+          unit.delete(false);
+        }
+      }
+    }
+  }
+
+  acceptSubjectRequest(
+    requestor: Player,
+    requestType: SubjectRequestType,
+  ): boolean {
+    const request = (requestor as PlayerImpl).findOutgoingSubjectRequest(
+      this,
+      requestType,
+    );
+    if (request === undefined) return false;
+
+    const subject = (
+      requestType === "protection" ? requestor : this
+    ) as PlayerImpl;
+    const overlord = (
+      requestType === "protection" ? this : requestor
+    ) as PlayerImpl;
+
+    if (
+      !this.canFormSubjectRelation(
+        subject,
+        overlord,
+        requestType === "protection",
+      )
+    ) {
+      return false;
+    }
+
+    const directAlliance = subject.allianceWith(overlord);
+    if (directAlliance !== null) {
+      this.mg.removeAllianceSilently(directAlliance);
+    }
+
+    subject._overlord = overlord;
+    subject._subjectLastGoldEarned = subject._goldEarned;
+    subject._lastSubjectEconomyTick = this.mg.ticks();
+    subject._lastSubjectAutonomyTick = this.mg.ticks();
+    subject._lastProtectionOutcomeTick = -1;
+    subject._subjectInfo =
+      requestType === "protection"
+        ? {
+            kind: SubjectRelationKind.Protectorate,
+            origin: "protection",
+            createdAt: this.mg.ticks(),
+            autonomy: 60,
+            tributeRate: 10,
+          }
+        : {
+            kind: SubjectRelationKind.Puppet,
+            origin: "subjugation",
+            createdAt: this.mg.ticks(),
+            autonomy: 40,
+            tributeRate: 20,
+          };
+
+    if (!overlord._subjects.includes(subject)) {
+      overlord._subjects.push(subject);
+    }
+
+    // Existing conventional attacks retreat as soon as isFriendly() changes;
+    // strategic weapons need explicit neutralization because they keep flying.
+    this.cancelDirectNukesBetween(subject, overlord);
+
+    if (subject._subjectInfo.kind === SubjectRelationKind.Puppet) {
+      // Puppets do not conduct an independent alliance policy. Any existing
+      // third-party alliances end when the puppet relationship is formed,
+      // and pending requests are rejected.
+      subject.removeAllAlliances();
+      this.mg.rejectAllianceRequestsInvolving(subject);
+    }
+
+    this.clearSubjectRequestsInvolving(subject, overlord);
+    this.mg.addUpdate({
+      type: GameUpdateType.SubjectRequestReply,
+      request: request.toUpdate(),
+      accepted: true,
+    });
+
+    // If protection is granted while the applicant is already under attack,
+    // the guarantee applies immediately to those existing defensive wars.
+    if (requestType === "protection") {
+      const currentAttackers = new Set<Player>();
+      for (const attack of subject.incomingAttacks()) {
+        if (!attack.isActive()) continue;
+        const attacker = attack.attacker();
+        if (attacker !== overlord) currentAttackers.add(attacker);
+      }
+      for (const attacker of currentAttackers) {
+        subject.raiseProtectionCall(attacker);
+      }
+    }
+
+    return true;
+  }
+
+  rejectSubjectRequest(
+    requestor: Player,
+    requestType: SubjectRequestType,
+  ): boolean {
+    const requestorImpl = requestor as PlayerImpl;
+    const request = requestorImpl.findOutgoingSubjectRequest(
+      this,
+      requestType,
+    );
+    if (request === undefined) return false;
+
+    requestorImpl._outgoingSubjectRequests =
+      requestorImpl._outgoingSubjectRequests.filter((r) => r !== request);
+    this.mg.addUpdate({
+      type: GameUpdateType.SubjectRequestReply,
+      request: request.toUpdate(),
+      accepted: false,
+    });
+    return true;
+  }
+
+  private cancelProtectionCallsForSubject(subject: Player): void {
+    const remaining: ProtectionCallRecord[] = [];
+
+    for (const call of this._pendingProtectionCalls) {
+      if (call.subject() !== subject) {
+        remaining.push(call);
+        continue;
+      }
+
+      this.mg.addUpdate({
+        type: GameUpdateType.ProtectionCallReply,
+        call: {
+          type: GameUpdateType.ProtectionCall,
+          overlordID: this.smallID(),
+          subjectID: subject.smallID(),
+          attackerID: call.attacker().smallID(),
+          createdAt: call.createdAt(),
+        },
+        intervened: false,
+        cancelled: true,
+      });
+    }
+
+    this._pendingProtectionCalls = remaining;
+  }
+
+  releaseSubject(subject: Player): boolean {
+    if (!this.isOverlordOf(subject)) return false;
+    this.cancelProtectionCallsForSubject(subject);
+    this._subjects = this._subjects.filter((p) => p !== subject);
+    const subjectImpl = subject as PlayerImpl;
+    subjectImpl._overlord = null;
+    subjectImpl._subjectInfo = null;
+    subjectImpl._lastSubjectEconomyTick = -1;
+    subjectImpl._lastSubjectAutonomyTick = -1;
+    subjectImpl._lastProtectionOutcomeTick = -1;
+    return true;
+  }
+
+  private protectionCallKey(subject: Player, attacker: Player): string {
+    return `${subject.id()}|${attacker.id()}`;
+  }
+
+  private canApplyProtectionOutcome(subject: PlayerImpl): boolean {
+    return (
+      subject._lastProtectionOutcomeTick < 0 ||
+      this.mg.ticks() - subject._lastProtectionOutcomeTick >=
+        SUBJECT_PROTECTION_OUTCOME_COOLDOWN_TICKS
+    );
+  }
+
+  private applyProtectionDecline(subject: PlayerImpl): void {
+    if (subject._subjectInfo === null) return;
+    if (!this.canApplyProtectionOutcome(subject)) return;
+
+    subject._lastProtectionOutcomeTick = this.mg.ticks();
+    const autonomyGain =
+      subject._subjectInfo.kind === SubjectRelationKind.Protectorate ? 10 : 5;
+    const relationLoss =
+      subject._subjectInfo.kind === SubjectRelationKind.Protectorate ? -25 : -15;
+
+    subject._subjectInfo.autonomy = Math.min(
+      100,
+      subject._subjectInfo.autonomy + autonomyGain,
+    );
+    subject.updateRelation(this, relationLoss);
+  }
+
+  private applyProtectionHonor(subject: PlayerImpl): void {
+    if (subject._subjectInfo === null) return;
+    if (!this.canApplyProtectionOutcome(subject)) return;
+
+    subject._lastProtectionOutcomeTick = this.mg.ticks();
+    subject._subjectInfo.autonomy = Math.max(
+      0,
+      subject._subjectInfo.autonomy - 2,
+    );
+    subject.updateRelation(this, 10);
+  }
+
+  private expireProtectionCalls(): void {
+    const duration = this.mg.config().allianceRequestDuration();
+    const active: ProtectionCallRecord[] = [];
+
+    for (const call of this._pendingProtectionCalls) {
+      const subject = call.subject() as PlayerImpl;
+      const attacker = call.attacker();
+      const noLongerValid =
+        !subject.isSubjectOf(this) ||
+        !subject.isAlive() ||
+        !attacker.isAlive() ||
+        subject.isFriendly(attacker);
+
+      if (noLongerValid) {
+        this.mg.addUpdate({
+          type: GameUpdateType.ProtectionCallReply,
+          call: {
+            type: GameUpdateType.ProtectionCall,
+            overlordID: this.smallID(),
+            subjectID: subject.smallID(),
+            attackerID: attacker.smallID(),
+            createdAt: call.createdAt(),
+          },
+          intervened: false,
+          cancelled: true,
+        });
+        continue;
+      }
+
+      if (this.mg.ticks() - call.createdAt() < duration) {
+        active.push(call);
+        continue;
+      }
+
+      this.applyProtectionDecline(subject);
+
+      this.mg.addUpdate({
+        type: GameUpdateType.ProtectionCallReply,
+        call: {
+          type: GameUpdateType.ProtectionCall,
+          overlordID: this.smallID(),
+          subjectID: subject.smallID(),
+          attackerID: attacker.smallID(),
+          createdAt: call.createdAt(),
+        },
+        intervened: false,
+      });
+    }
+
+    this._pendingProtectionCalls = active;
+  }
+
+  incomingProtectionCalls(): ProtectionCall[] {
+    this.expireProtectionCalls();
+    return [...this._pendingProtectionCalls];
+  }
+
+  raiseProtectionCall(attacker: Player): boolean {
+    if (
+      this._overlord === null ||
+      this._subjectInfo === null ||
+      !this.isAlive() ||
+      !attacker.isAlive() ||
+      attacker === this ||
+      attacker === this._overlord
+    ) {
+      return false;
+    }
+
+    // Protection is defensive. A subject that initiated this conflict cannot
+    // invoke its overlord merely because the victim fights back.
+    const stillAttacking = this.outgoingAttacks().some(
+      (attack) =>
+        attack.isActive() &&
+        attack.target().isPlayer() &&
+        attack.target() === attacker,
+    );
+    if (stillAttacking || this.hasRecentAggressionAgainst(attacker)) {
+      return false;
+    }
+
+    const overlord = this._overlord as PlayerImpl;
+    overlord.expireProtectionCalls();
+
+    const key = overlord.protectionCallKey(this, attacker);
+    const last = overlord._lastProtectionCallTick.get(key);
+    if (
+      last !== undefined &&
+      this.mg.ticks() - last < this.mg.config().allianceRequestDuration()
+    ) {
+      return false;
+    }
+
+    const call = new ProtectionCallRecord(this, attacker, this.mg.ticks());
+    overlord._pendingProtectionCalls.push(call);
+    overlord._lastProtectionCallTick.set(key, this.mg.ticks());
+    this.mg.addUpdate({
+      type: GameUpdateType.ProtectionCall,
+      overlordID: overlord.smallID(),
+      subjectID: this.smallID(),
+      attackerID: attacker.smallID(),
+      createdAt: call.createdAt(),
+    });
+    return true;
+  }
+
+  respondToProtectionCall(
+    subject: Player,
+    attacker: Player,
+    intervene: boolean,
+  ): boolean {
+    this.expireProtectionCalls();
+    const callIndex = this._pendingProtectionCalls.findIndex(
+      (call) => call.subject() === subject && call.attacker() === attacker,
+    );
+    if (callIndex < 0 || !subject.isSubjectOf(this)) return false;
+
+    if (intervene && this.isOnSameTeam(attacker)) {
+      return false;
+    }
+
+    const [call] = this._pendingProtectionCalls.splice(callIndex, 1);
+    const subjectImpl = subject as PlayerImpl;
+
+    if (!attacker.isAlive() || subject.isFriendly(attacker)) {
+      this.mg.addUpdate({
+        type: GameUpdateType.ProtectionCallReply,
+        call: {
+          type: GameUpdateType.ProtectionCall,
+          overlordID: this.smallID(),
+          subjectID: subject.smallID(),
+          attackerID: attacker.smallID(),
+          createdAt: call.createdAt(),
+        },
+        intervened: false,
+        cancelled: true,
+      });
+      return true;
+    }
+
+    if (intervene) {
+      const alliance = this.allianceWith(attacker);
+      if (alliance !== null) {
+        this.breakAlliance(alliance);
+      }
+
+      this.updateRelation(attacker, -100);
+      attacker.updateRelation(this, -70);
+      if (this.canTarget(attacker)) {
+        this.target(attacker);
+      }
+
+      this.applyProtectionHonor(subjectImpl);
+    } else {
+      this.applyProtectionDecline(subjectImpl);
+    }
+
+    this.mg.addUpdate({
+      type: GameUpdateType.ProtectionCallReply,
+      call: {
+        type: GameUpdateType.ProtectionCall,
+        overlordID: this.smallID(),
+        subjectID: subject.smallID(),
+        attackerID: attacker.smallID(),
+        createdAt: call.createdAt(),
+      },
+      intervened: intervene,
+    });
+    return true;
+  }
+
+  canDeclareIndependence(): boolean {
+    return (
+      this._overlord !== null &&
+      this._subjectInfo !== null &&
+      this._subjectInfo.autonomy >= SUBJECT_INDEPENDENCE_AUTONOMY
+    );
+  }
+
+  processSubjectRelationTick(): void {
+    // Overlords must resolve ignored protection calls too; expiration counts
+    // as refusing the obligation and therefore raises subject autonomy.
+    this.expireProtectionCalls();
+
+    if (this._overlord === null || this._subjectInfo === null) return;
+
+    const now = this.mg.ticks();
+    const overlord = this._overlord as PlayerImpl;
+
+    if (
+      this._lastSubjectEconomyTick < 0 ||
+      now - this._lastSubjectEconomyTick >= SUBJECT_TRIBUTE_INTERVAL_TICKS
+    ) {
+      const earnedSinceLast = this._goldEarned - this._subjectLastGoldEarned;
+      this._subjectLastGoldEarned = this._goldEarned;
+      this._lastSubjectEconomyTick = now;
+
+      if (earnedSinceLast > 0n && this._subjectInfo.tributeRate > 0) {
+        const due =
+          (earnedSinceLast * BigInt(this._subjectInfo.tributeRate)) / 100n;
+        const paid = due > this._gold ? this._gold : due;
+        if (paid > 0n) {
+          this.removeGold(paid);
+          overlord.addGold(paid);
+        }
+      }
+    }
+
+    if (
+      this._lastSubjectAutonomyTick < 0 ||
+      now - this._lastSubjectAutonomyTick >= SUBJECT_AUTONOMY_INTERVAL_TICKS
+    ) {
+      this._lastSubjectAutonomyTick = now;
+
+      const troopRatio =
+        overlord.troops() > 0 ? this.troops() / overlord.troops() : 1;
+      const tileRatio =
+        overlord.numTilesOwned() > 0
+          ? this.numTilesOwned() / overlord.numTilesOwned()
+          : 1;
+
+      let delta =
+        this._subjectInfo.kind === SubjectRelationKind.Protectorate ? 1 : 0;
+
+      if (troopRatio >= 0.9 && tileRatio >= 0.9) {
+        delta += 2;
+      } else if (troopRatio >= 0.6 || tileRatio >= 0.6) {
+        delta += 1;
+      }
+
+      if (troopRatio <= 0.3 && tileRatio <= 0.3) {
+        delta -= 1;
+      }
+
+      this._subjectInfo.autonomy = Math.max(
+        0,
+        Math.min(100, this._subjectInfo.autonomy + delta),
+      );
+    }
+  }
+
+  declareIndependence(): boolean {
+    if (!this.canDeclareIndependence() || this._overlord === null) return false;
+    const overlord = this._overlord as PlayerImpl;
+    overlord.cancelProtectionCallsForSubject(this);
+    overlord._subjects = overlord._subjects.filter((p) => p !== this);
+    this._overlord = null;
+    this._subjectInfo = null;
+    this._lastSubjectEconomyTick = -1;
+    this._lastSubjectAutonomyTick = -1;
+    this._lastProtectionOutcomeTick = -1;
+    this.updateRelation(overlord, -100);
+    overlord.updateRelation(this, -100);
+    return true;
+  }
+
   createAllianceRequest(recipient: Player): AllianceRequest | null {
     if (this.isAlliedWith(recipient)) {
       throw new Error(`cannot create alliance request, already allies`);
+    }
+    if (!this.canSendAllianceRequest(recipient)) {
+      return null;
     }
     return this.mg.createAllianceRequest(this, recipient satisfies Player);
   }
@@ -969,11 +1735,36 @@ export class PlayerImpl implements Player {
     });
   }
 
+  private puppetMayFight(other: Player): boolean {
+    if (!this.isPuppet()) return true;
+
+    const defensiveWar =
+      other.hasRecentAggressionAgainst(this) ||
+      this.incomingAttacks().some(
+        (attack) => attack.isActive() && attack.attacker() === other,
+      );
+    if (defensiveWar) return true;
+
+    const overlord = this._overlord;
+    if (overlord === null || !overlord.isAlive()) return false;
+
+    const overlordDesignatedEnemy =
+      overlord.targets().includes(other) ||
+      overlord.outgoingAttacks().some(
+        (attack) => attack.isActive() && attack.target() === other,
+      );
+
+    return overlordDesignatedEnemy;
+  }
+
   canTarget(other: Player): boolean {
     if (this === other) {
       return false;
     }
     if (this.isFriendly(other)) {
+      return false;
+    }
+    if (!this.puppetMayFight(other)) {
       return false;
     }
     for (const t of this.targets_) {
@@ -1202,6 +1993,7 @@ export class PlayerImpl implements Player {
   }
 
   canTrade(other: Player): boolean {
+    if (this.isInSubjectRelation(other)) return true;
     const embargo =
       other.hasEmbargoAgainst(this) || this.hasEmbargoAgainst(other);
     return !embargo && other.id() !== this.id();
@@ -1212,6 +2004,7 @@ export class PlayerImpl implements Player {
   }
 
   addEmbargo(other: Player, isTemporary: boolean): void {
+    if (this.isInSubjectRelation(other)) return;
     const embargo = this.embargoes.get(other.id());
     if (embargo !== undefined && !embargo.isTemporary) return;
 
@@ -1276,7 +2069,14 @@ export class PlayerImpl implements Player {
     if (other.isDisconnected() && !treatAFKFriendly) {
       return false;
     }
-    return this.isOnSameTeam(other) || this.isAlliedWith(other);
+    const sharedOverlord =
+      this.overlord() !== null && this.overlord() === other.overlord();
+    return (
+      this.isOnSameTeam(other) ||
+      this.isAlliedWith(other) ||
+      this.isInSubjectRelation(other) ||
+      sharedOverlord
+    );
   }
 
   gold(): Gold {
@@ -1890,15 +2690,49 @@ export class PlayerImpl implements Player {
     return false;
   }
 
+  recordAggressionAgainst(player: Player): void {
+    if (player === this) return;
+    this._lastAggressionTick.set(player.id(), this.mg.ticks());
+  }
+
+  hasRecentAggressionAgainst(player: Player): boolean {
+    const tick = this._lastAggressionTick.get(player.id());
+    return (
+      tick !== undefined &&
+      this.mg.ticks() - tick < PROTECTION_AGGRESSION_MEMORY_TICKS
+    );
+  }
+
+  registerHostileActionAgainst(player: Player): void {
+    if (player === this) return;
+
+    const activeRetaliation = this.incomingAttacks().some(
+      (incoming) =>
+        incoming.isActive() &&
+        incoming.attacker() === player,
+    );
+    const recentRetaliation = player.hasRecentAggressionAgainst(this);
+
+    if (!activeRetaliation && !recentRetaliation) {
+      this.recordAggressionAgainst(player);
+    }
+  }
+
   public canAttackPlayer(
     player: Player,
     treatAFKFriendly: boolean = false,
   ): boolean {
+    if (this.isFriendly(player, treatAFKFriendly)) {
+      return false;
+    }
+    if (!this.puppetMayFight(player)) {
+      return false;
+    }
     if (this.type() !== PlayerType.Human) {
       // Only human attackers respect PVP immunity
-      return !this.isFriendly(player, treatAFKFriendly);
+      return true;
     }
-    return !player.isImmune() && !this.isFriendly(player, treatAFKFriendly);
+    return !player.isImmune();
   }
 
   public canAttack(tile: TileRef): boolean {

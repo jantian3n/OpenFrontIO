@@ -16,6 +16,8 @@ import {
   PlayerID,
   PlayerProfile,
   PlayerType,
+  SubjectRelationKind,
+  SubjectRequestType,
   Team,
   Tick,
   UnitType,
@@ -97,6 +99,15 @@ function stateFromUpdate(pu: PlayerUpdate): PlayerState {
     spawnTile: pu.spawnTile,
     lastDeleteUnitTick: pu.lastDeleteUnitTick!,
     allies: pu.allies!.slice(),
+    overlord: pu.overlord ?? null,
+    subjects: pu.subjects?.slice() ?? [],
+    subjectKind: pu.subjectKind ?? null,
+    subjectOrigin: pu.subjectOrigin ?? null,
+    subjectCreatedAt: pu.subjectCreatedAt ?? null,
+    autonomy: pu.autonomy ?? null,
+    tributeRate: pu.tributeRate ?? null,
+    outgoingSubjectRequests:
+      pu.outgoingSubjectRequests?.map((request) => ({ ...request })) ?? [],
     embargoes: [],
     targets: pu.targets!.slice(),
     outgoingAttacks: pu.outgoingAttacks!,
@@ -585,8 +596,97 @@ export class PlayerView {
     return this.static.team !== null && this.static.team === other.static.team;
   }
 
+  isSubject(): boolean {
+    return (this.state.overlord ?? null) !== null;
+  }
+
+  isProtectorate(): boolean {
+    return (
+      this.isSubject() &&
+      this.state.subjectKind === SubjectRelationKind.Protectorate
+    );
+  }
+
+  isPuppet(): boolean {
+    return (
+      this.isSubject() &&
+      this.state.subjectKind === SubjectRelationKind.Puppet
+    );
+  }
+
+  overlord(): PlayerView | null {
+    const overlord = this.state.overlord ?? null;
+    return overlord === null
+      ? null
+      : (this.game.playerBySmallID(overlord) as PlayerView);
+  }
+
+  subjects(): PlayerView[] {
+    return (this.state.subjects ?? []).map(
+      (id) => this.game.playerBySmallID(id) as PlayerView,
+    );
+  }
+
+  subjectKind(): SubjectRelationKind | null {
+    return (this.state.subjectKind ?? null) as SubjectRelationKind | null;
+  }
+
+  subjectOrigin(): SubjectRequestType | null {
+    return (this.state.subjectOrigin ?? null) as SubjectRequestType | null;
+  }
+
+  autonomy(): number | null {
+    return this.state.autonomy ?? null;
+  }
+
+  tributeRate(): number | null {
+    return this.state.tributeRate ?? null;
+  }
+
+  isSubjectOf(other: PlayerView): boolean {
+    return (this.state.overlord ?? null) === other.smallID();
+  }
+
+  isPuppetOf(other: PlayerView): boolean {
+    return this.isPuppet() && this.isSubjectOf(other);
+  }
+
+  isOverlordOf(other: PlayerView): boolean {
+    return (this.state.subjects ?? []).includes(other.smallID());
+  }
+
+  isInSubjectRelation(other: PlayerView): boolean {
+    return this.isSubjectOf(other) || this.isOverlordOf(other);
+  }
+
+  isInPuppetRelation(other: PlayerView): boolean {
+    return (
+      this.isPuppetOf(other) ||
+      (this.isOverlordOf(other) && other.isPuppetOf(this))
+    );
+  }
+
+  isRequestingSubjectRelationWith(
+    other: PlayerView,
+    requestType?: SubjectRequestType,
+  ): boolean {
+    return (this.state.outgoingSubjectRequests ?? []).some(
+      (request) =>
+        request.recipientID === other.id() &&
+        (requestType === undefined || request.requestType === requestType),
+    );
+  }
+
   isFriendly(other: PlayerView): boolean {
-    return this.isAlliedWith(other) || this.isOnSameTeam(other);
+    const myOverlord = this.overlord();
+    const sharedOverlord =
+      myOverlord !== null && myOverlord === other.overlord();
+    return (
+      this.isAlliedWith(other) ||
+      this.isOnSameTeam(other) ||
+      this.isInSubjectRelation(other) ||
+      sharedOverlord
+    );
   }
 
   isRequestingAllianceWith(other: PlayerView) {

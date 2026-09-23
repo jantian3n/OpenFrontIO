@@ -257,15 +257,28 @@ export class GameRunner {
 
     if (tile !== null && this.game.hasOwner(tile)) {
       const other = this.game.owner(tile) as Player;
+      const pendingSubjectRequest = other
+        .outgoingSubjectRequests()
+        .find((request) => request.recipient() === player)
+        ?.requestType();
+
       actions.interaction = {
         sharedBorder: player.sharesBorderWith(other),
         canSendEmoji: player.canSendEmoji(other),
         canTarget: player.canTarget(other),
         canSendAllianceRequest: player.canSendAllianceRequest(other),
         canBreakAlliance: player.isAlliedWith(other),
+        canRequestProtection: player.canRequestProtection(other),
+        canDemandSubjugation: player.canDemandSubjugation(other),
+        pendingSubjectRequest,
+        canReleaseSubject: player.isOverlordOf(other),
+        canDeclareIndependence:
+          player.isSubjectOf(other) && player.canDeclareIndependence(),
         canDonateGold: player.canDonateGold(other),
         canDonateTroops: player.canDonateTroops(other),
-        canEmbargo: !player.hasEmbargoAgainst(other),
+        canEmbargo:
+          !player.hasEmbargoAgainst(other) &&
+          !player.isInSubjectRelation(other),
         allianceInfo: player.allianceInfo(other) ?? undefined,
       };
     }

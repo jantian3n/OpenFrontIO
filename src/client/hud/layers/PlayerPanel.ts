@@ -26,6 +26,7 @@ import {
   PlayerReportedEvent,
   SendAllianceRequestIntentEvent,
   SendBreakAllianceIntentEvent,
+  SendSubjectIntentEvent,
   SendEmbargoAllIntentEvent,
   SendEmbargoIntentEvent,
   SendEmojiIntentEvent,
@@ -240,6 +241,25 @@ export class PlayerPanel extends LitElement implements Controller {
   ) {
     e.stopPropagation();
     this.eventBus.emit(new SendBreakAllianceIntentEvent(myPlayer, other));
+    this.hide();
+  }
+
+  private handleSubjectAction(
+    e: Event,
+    action:
+      | "request_protection"
+      | "demand_subjugation"
+      | "accept"
+      | "reject"
+      | "release"
+      | "independence",
+    target?: PlayerView,
+    requestType?: "protection" | "subjugation",
+  ) {
+    e.stopPropagation();
+    this.eventBus.emit(
+      new SendSubjectIntentEvent(action, target, requestType),
+    );
     this.hide();
   }
 
@@ -800,6 +820,70 @@ export class PlayerPanel extends LitElement implements Controller {
     `;
   }
 
+  private renderSubjectRelations(other: PlayerView) {
+    const overlord = other.overlord();
+    const subjects = other.subjects();
+    if (overlord === null && subjects.length === 0) return html``;
+
+    const relationLabel = other.isProtectorate()
+      ? translateText("player_panel.protectorate")
+      : translateText("player_panel.puppet");
+
+    return html`
+      <div class="select-none mt-2 space-y-2">
+        ${overlord !== null
+          ? html`
+              <div class="grid grid-cols-[auto_1fr] gap-x-6 text-base">
+                <div class="font-semibold text-zinc-300">
+                  ${translateText("player_panel.subject_status")}
+                </div>
+                <div class="text-right font-semibold text-amber-300">
+                  ${relationLabel}
+                </div>
+                <div class="font-semibold text-zinc-300">
+                  ${translateText("player_panel.overlord")}
+                </div>
+                <div class="text-right font-semibold text-zinc-100">
+                  ${overlord.displayName()}
+                </div>
+                <div class="font-semibold text-zinc-300">
+                  ${translateText("player_panel.autonomy")}
+                </div>
+                <div class="text-right font-semibold text-zinc-100">
+                  ${other.autonomy() ?? 0}%
+                </div>
+                <div class="font-semibold text-zinc-300">
+                  ${translateText("player_panel.tribute_rate")}
+                </div>
+                <div class="text-right font-semibold text-zinc-100">
+                  ${other.tributeRate() ?? 0}%
+                </div>
+              </div>
+            `
+          : ""}
+        ${subjects.length > 0
+          ? html`<div class="grid grid-cols-[auto_1fr] gap-x-6 text-base">
+              <div class="font-semibold text-zinc-300">
+                ${translateText("player_panel.subjects")}
+              </div>
+              <div class="text-right font-semibold text-zinc-100">
+                ${subjects
+                  .map(
+                    (p) =>
+                      `${p.displayName()} (${
+                        p.isProtectorate()
+                          ? translateText("player_panel.protectorate")
+                          : translateText("player_panel.puppet")
+                      })`,
+                  )
+                  .join(", ")}
+              </div>
+            </div>`
+          : ""}
+      </div>
+    `;
+  }
+
   private renderAllianceExpiry() {
     if (this.allianceExpiryText === null) return html``;
     return html`
@@ -830,8 +914,19 @@ export class PlayerPanel extends LitElement implements Controller {
         ? this.actions?.canSendEmojiAllPlayers
         : this.actions?.interaction?.canSendEmoji;
     const canBreakAlliance = this.actions?.interaction?.canBreakAlliance;
+    const canRequestProtection =
+      this.actions?.interaction?.canRequestProtection;
+    const canDemandSubjugation =
+      this.actions?.interaction?.canDemandSubjugation;
+    const pendingSubjectRequest =
+      this.actions?.interaction?.pendingSubjectRequest;
+    const canReleaseSubject = this.actions?.interaction?.canReleaseSubject;
+    const canDeclareIndependence =
+      this.actions?.interaction?.canDeclareIndependence;
     const canTarget = this.actions?.interaction?.canTarget;
     const canEmbargo = this.actions?.interaction?.canEmbargo;
+    const isSubjectRelation = my.isInSubjectRelation(other);
+    const isMyOverlord = my.isSubjectOf(other);
 
     return html`
       <div class="flex flex-col gap-2.5">
@@ -891,7 +986,7 @@ export class PlayerPanel extends LitElement implements Controller {
           ? html``
           : html`
               <div class="grid auto-cols-fr grid-flow-col gap-1">
-                ${canEmbargo
+                ${!isSubjectRelation && canEmbargo
                   ? actionButton({
                       onClick: (e: MouseEvent) =>
                         this.handleEmbargoClick(e, my, other),
@@ -901,7 +996,8 @@ export class PlayerPanel extends LitElement implements Controller {
                       label: translateText("player_panel.stop_trade"),
                       type: "yellow",
                     })
-                  : actionButton({
+                  : !isSubjectRelation
+                    ? actionButton({
                       onClick: (e: MouseEvent) =>
                         this.handleStopEmbargoClick(e, my, other),
                       icon: startTradingIcon,
@@ -909,7 +1005,8 @@ export class PlayerPanel extends LitElement implements Controller {
                       title: translateText("player_panel.start_trade"),
                       label: translateText("player_panel.start_trade"),
                       type: "green",
-                    })}
+                    })
+                    : ""}
                 ${canBreakAlliance
                   ? actionButton({
                       onClick: (e: MouseEvent) =>
@@ -932,6 +1029,104 @@ export class PlayerPanel extends LitElement implements Controller {
                       type: "indigo",
                     })
                   : ""}
+                ${canRequestProtection
+                  ? actionButton({
+                      onClick: (e: MouseEvent) =>
+                        this.handleSubjectAction(
+                          e,
+                          "request_protection",
+                          other,
+                        ),
+                      icon: shieldIcon,
+                      iconAlt: "Seek Protection",
+                      title: translateText("player_panel.seek_protection"),
+                      label: translateText("player_panel.seek_protection"),
+                      type: "indigo",
+                    })
+                  : ""}
+                ${canDemandSubjugation
+                  ? actionButton({
+                      onClick: (e: MouseEvent) =>
+                        this.handleSubjectAction(
+                          e,
+                          "demand_subjugation",
+                          other,
+                        ),
+                      icon: shieldIcon,
+                      iconAlt: "Demand Subjugation",
+                      title: translateText("player_panel.demand_subjugation"),
+                      label: translateText("player_panel.demand_subjugation"),
+                      type: "yellow",
+                    })
+                  : ""}
+                ${pendingSubjectRequest
+                  ? actionButton({
+                      onClick: (e: MouseEvent) =>
+                        this.handleSubjectAction(
+                          e,
+                          "accept",
+                          other,
+                          pendingSubjectRequest,
+                        ),
+                      icon: shieldIcon,
+                      iconAlt: "Accept Subject Request",
+                      title: translateText("player_panel.accept_subject_request"),
+                      label: translateText("player_panel.accept_subject_request"),
+                      type: "green",
+                    })
+                  : ""}
+                ${pendingSubjectRequest
+                  ? actionButton({
+                      onClick: (e: MouseEvent) =>
+                        this.handleSubjectAction(
+                          e,
+                          "reject",
+                          other,
+                          pendingSubjectRequest,
+                        ),
+                      icon: breakAllianceIcon,
+                      iconAlt: "Reject Subject Request",
+                      title: translateText("player_panel.reject_subject_request"),
+                      label: translateText("player_panel.reject_subject_request"),
+                      type: "red",
+                    })
+                  : ""}
+                ${canReleaseSubject
+                  ? actionButton({
+                      onClick: (e: MouseEvent) =>
+                        this.handleSubjectAction(e, "release", other),
+                      icon: shieldIcon,
+                      iconAlt: "Release Subject",
+                      title: translateText("player_panel.release_subject"),
+                      label: translateText("player_panel.release_subject"),
+                      type: "yellow",
+                    })
+                  : ""}
+                ${canDeclareIndependence
+                  ? actionButton({
+                      onClick: (e: MouseEvent) =>
+                        this.handleSubjectAction(e, "independence"),
+                      icon: breakAllianceIcon,
+                      iconAlt: "Declare Independence",
+                      title: translateText("player_panel.declare_independence"),
+                      label: translateText("player_panel.declare_independence"),
+                      type: "red",
+                    })
+                  : isMyOverlord
+                    ? actionButton({
+                        onClick: () => {},
+                        icon: breakAllianceIcon,
+                        iconAlt: "Declare Independence",
+                        title: translateText(
+                          "player_panel.independence_requires_autonomy",
+                        ),
+                        label: translateText(
+                          "player_panel.independence_requires_autonomy",
+                        ),
+                        type: "red",
+                        disabled: true,
+                      })
+                    : ""}
               </div>
             `}
         ${other === my
@@ -1126,6 +1321,7 @@ export class PlayerPanel extends LitElement implements Controller {
 
                     <!-- Alliances list -->
                     ${this.renderAlliances(other)}
+                    ${this.renderSubjectRelations(other)}
 
                     <!-- Alliance time remaining -->
                     ${this.renderAllianceExpiry()}

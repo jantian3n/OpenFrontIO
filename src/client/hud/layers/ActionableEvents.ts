@@ -8,6 +8,10 @@ import {
   AllianceRequestUpdate,
   BrokeAllianceUpdate,
   GameUpdateType,
+  ProtectionCallReplyUpdate,
+  ProtectionCallUpdate,
+  SubjectRequestReplyUpdate,
+  SubjectRequestUpdate,
 } from "../../../core/game/GameUpdates";
 import { Controller } from "../../Controller";
 import { PlaySoundEffectEvent } from "../../sound/Sounds";
@@ -16,6 +20,7 @@ import {
   SendAllianceExtensionIntentEvent,
   SendAllianceRejectIntentEvent,
   SendAllianceRequestIntentEvent,
+  SendSubjectIntentEvent,
 } from "../../Transport";
 import { UIState } from "../../UIState";
 import { getMessageTypeClasses, translateText } from "../../Utils";
@@ -36,6 +41,8 @@ interface ActionableEvent {
   allianceID?: number;
   duration?: Tick;
   requestorID: number;
+  subjectRequestType?: "protection" | "subjugation";
+  protectionSubjectID?: number;
 }
 
 @customElement("actionable-events")
@@ -60,6 +67,16 @@ export class ActionableEvents extends LitElement implements Controller {
     [
       GameUpdateType.AllianceExtension,
       this.onAllianceExtensionEvent.bind(this),
+    ],
+    [GameUpdateType.SubjectRequest, this.onSubjectRequestEvent.bind(this)],
+    [
+      GameUpdateType.SubjectRequestReply,
+      this.onSubjectRequestReplyEvent.bind(this),
+    ],
+    [GameUpdateType.ProtectionCall, this.onProtectionCallEvent.bind(this)],
+    [
+      GameUpdateType.ProtectionCallReply,
+      this.onProtectionCallReplyEvent.bind(this),
     ],
   ] as const;
 
@@ -120,14 +137,22 @@ export class ActionableEvents extends LitElement implements Controller {
         (event.duration === undefined ||
           this.game.ticks() - event.createdAt < event.duration) &&
         (event.type !== MessageType.ALLIANCE_REQUEST ||
-          // We remove Alliance Requests if the requestor is dead.
           ((
             this.game.playerBySmallID(event.requestorID) as PlayerView
           ).isAlive() &&
-            // We remove Alliance Requests if the requestor is no longer requesting an alliance with us.
             (
               this.game.playerBySmallID(event.requestorID) as PlayerView
-            ).isRequestingAllianceWith(this.game.myPlayer() as PlayerView))),
+            ).isRequestingAllianceWith(this.game.myPlayer() as PlayerView))) &&
+        (event.type !== MessageType.SUBJECT_REQUEST ||
+          ((
+            this.game.playerBySmallID(event.requestorID) as PlayerView
+          ).isAlive() &&
+            (
+              this.game.playerBySmallID(event.requestorID) as PlayerView
+            ).isRequestingSubjectRelationWith(
+              this.game.myPlayer() as PlayerView,
+              event.subjectRequestType,
+            ))),
     );
 
     if (this.events.length !== remainingEvents.length) {
@@ -259,6 +284,166 @@ export class ActionableEvents extends LitElement implements Controller {
       focusID: update.requestorID,
       requestorID: update.requestorID,
     });
+  }
+
+  private onSubjectRequestEvent(update: SubjectRequestUpdate) {
+    const myPlayer = this.game.myPlayer();
+    if (!myPlayer || update.recipientID !== myPlayer.smallID()) return;
+
+    const requestor = this.game.playerBySmallID(
+      update.requestorID,
+    ) as PlayerView;
+
+    const description =
+      update.requestType === "protection"
+        ? translateText("events_display.request_protection", {
+            name: requestor.displayName(),
+          })
+        : translateText("events_display.demand_subjugation", {
+            name: requestor.displayName(),
+          });
+
+    this.addEvent({
+      description,
+      buttons: [
+        {
+          text: translateText("events_display.focus"),
+          className: "btn-gray",
+          action: () => this.eventBus.emit(new GoToPlayerEvent(requestor)),
+          preventClose: true,
+        },
+        {
+          text: translateText("events_display.accept_subject_request"),
+          className: "btn",
+          action: () =>
+            this.eventBus.emit(
+              new SendSubjectIntentEvent(
+                "accept",
+                requestor,
+                update.requestType,
+              ),
+            ),
+        },
+        {
+          text: translateText("events_display.reject_subject_request"),
+          className: "btn-info",
+          action: () =>
+            this.eventBus.emit(
+              new SendSubjectIntentEvent(
+                "reject",
+                requestor,
+                update.requestType,
+              ),
+            ),
+        },
+      ],
+      type: MessageType.SUBJECT_REQUEST,
+      createdAt: this.game.ticks(),
+      priority: 1,
+      duration: this.game.config().allianceRequestDuration(),
+      focusID: update.requestorID,
+      requestorID: update.requestorID,
+      subjectRequestType: update.requestType,
+    });
+  }
+
+  private onProtectionCallEvent(update: ProtectionCallUpdate) {
+    const myPlayer = this.game.myPlayer();
+    if (!myPlayer || update.overlordID !== myPlayer.smallID()) return;
+
+    const subject = this.game.playerBySmallID(update.subjectID) as PlayerView;
+    const attacker = this.game.playerBySmallID(update.attackerID) as PlayerView;
+    const canIntervene = !myPlayer.isOnSameTeam(attacker);
+
+    this.addEvent({
+      description: translateText("events_display.protection_call", {
+        subject: subject.displayName(),
+        attacker: attacker.displayName(),
+      }),
+      buttons: [
+        {
+          text: translateText("events_display.focus"),
+          className: "btn-gray",
+          action: () => this.eventBus.emit(new GoToPlayerEvent(attacker)),
+          preventClose: true,
+        },
+        ...(canIntervene
+          ? [
+              {
+                text: translateText("events_display.intervene"),
+                className: "btn",
+                action: () =>
+                  this.eventBus.emit(
+                    new SendSubjectIntentEvent(
+                      "intervene",
+                      attacker,
+                      undefined,
+                      subject,
+                    ),
+                  ),
+              },
+            ]
+          : []),
+        {
+          text: translateText("events_display.decline_intervention"),
+          className: "btn-info",
+          action: () =>
+            this.eventBus.emit(
+              new SendSubjectIntentEvent(
+                "decline_protection_call",
+                attacker,
+                undefined,
+                subject,
+              ),
+            ),
+        },
+      ],
+      type: MessageType.PROTECTION_CALL,
+      createdAt: this.game.ticks(),
+      priority: 2,
+      duration: this.game.config().allianceRequestDuration(),
+      focusID: update.attackerID,
+      requestorID: update.attackerID,
+      protectionSubjectID: update.subjectID,
+    });
+  }
+
+  private onProtectionCallReplyEvent(update: ProtectionCallReplyUpdate) {
+    const myPlayer = this.game.myPlayer();
+    if (!myPlayer || update.call.overlordID !== myPlayer.smallID()) return;
+
+    const remaining = this.events.filter(
+      (event) =>
+        !(
+          event.type === MessageType.PROTECTION_CALL &&
+          event.focusID === update.call.attackerID &&
+          event.protectionSubjectID === update.call.subjectID
+        ),
+    );
+    if (remaining.length !== this.events.length) {
+      this.events = remaining;
+      this.requestUpdate();
+    }
+  }
+
+  private onSubjectRequestReplyEvent(update: SubjectRequestReplyUpdate) {
+    const myPlayer = this.game.myPlayer();
+    if (!myPlayer || update.request.recipientID !== myPlayer.smallID()) {
+      return;
+    }
+
+    const remaining = this.events.filter(
+      (event) =>
+        !(
+          event.type === MessageType.SUBJECT_REQUEST &&
+          event.focusID === update.request.requestorID &&
+          event.subjectRequestType === update.request.requestType
+        ),
+    );
+    if (remaining.length !== this.events.length) {
+      this.events = remaining;
+      this.requestUpdate();
+    }
   }
 
   private onAllianceRequestReplyEvent(update: AllianceRequestReplyUpdate) {

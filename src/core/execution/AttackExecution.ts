@@ -111,6 +111,10 @@ export class AttackExecution implements Execution {
       return;
     }
 
+    if (this.target.isPlayer()) {
+      this._owner.registerHostileActionAgainst(this.target as Player);
+    }
+
     this.startTroops ??= this.mg
       .config()
       .attackAmount(this._owner, this.target);
@@ -170,6 +174,10 @@ export class AttackExecution implements Execution {
     // would measure one click, and would count an attack that cancelled out
     // and never landed.
     this.mg.stats().attackMaxIncoming(this.target, this.attack.troops());
+
+    if (this.target.isPlayer()) {
+      this.target.raiseProtectionCall(this._owner);
+    }
 
     if (this.target.isPlayer()) {
       const difficulty = this.mg.config().gameConfig().difficulty;
