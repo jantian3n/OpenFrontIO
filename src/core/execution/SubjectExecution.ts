@@ -114,21 +114,13 @@ export class SubjectExecution implements Execution {
         success =
           this.target !== null &&
           this.subject !== null &&
-          this.player.respondToProtectionCall(
-            this.subject,
-            this.target,
-            true,
-          );
+          this.player.respondToProtectionCall(this.subject, this.target, true);
         break;
       case "decline_protection_call":
         success =
           this.target !== null &&
           this.subject !== null &&
-          this.player.respondToProtectionCall(
-            this.subject,
-            this.target,
-            false,
-          );
+          this.player.respondToProtectionCall(this.subject, this.target, false);
         break;
     }
 
