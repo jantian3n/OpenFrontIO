@@ -20,7 +20,7 @@ import { MoveWarshipExecution } from "./MoveWarshipExecution";
 import { NationExecution } from "./NationExecution";
 import { NoOpExecution } from "./NoOpExecution";
 import { PauseExecution } from "./PauseExecution";
-import { PuppetExecution } from "./PuppetExecution";
+import { SubjectExecution } from "./SubjectExecution";
 import { QuickChatExecution } from "./QuickChatExecution";
 import { RetreatExecution } from "./RetreatExecution";
 import { SpawnExecution } from "./SpawnExecution";
@@ -89,8 +89,13 @@ export class Executor {
         return new AllianceRejectExecution(intent.requestor, player);
       case "breakAlliance":
         return new BreakAllianceExecution(player, intent.recipient);
-      case "puppet":
-        return new PuppetExecution(player, intent.action, intent.target);
+      case "subject":
+        return new SubjectExecution(
+          player,
+          intent.action,
+          intent.target,
+          intent.requestType,
+        );
       case "targetPlayer":
         return new TargetPlayerExecution(player, intent.target);
       case "emoji":
