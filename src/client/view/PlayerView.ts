@@ -677,10 +677,6 @@ export class PlayerView {
     );
   }
 
-  isRequestingPuppetOf(other: PlayerView): boolean {
-    return this.isRequestingSubjectRelationWith(other, "subjugation");
-  }
-
   isFriendly(other: PlayerView): boolean {
     const myOverlord = this.overlord();
     const sharedOverlord =
