@@ -1677,6 +1677,9 @@ export class PlayerImpl implements Player {
     if (this.isAlliedWith(recipient)) {
       throw new Error(`cannot create alliance request, already allies`);
     }
+    if (!this.canSendAllianceRequest(recipient)) {
+      return null;
+    }
     return this.mg.createAllianceRequest(this, recipient satisfies Player);
   }
 
