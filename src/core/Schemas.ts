@@ -660,13 +660,16 @@ export const SubjectIntentSchema = z.object({
     "accept",
     "reject",
     "release",
+    "request_independence",
     "independence",
     "intervene",
     "decline_protection_call",
   ]),
   target: MappedID.optional(),
   subject: MappedID.optional(),
-  requestType: z.enum(["protection", "subjugation"]).optional(),
+  requestType: z
+    .enum(["protection", "subjugation", "independence"])
+    .optional(),
 });
 
 export const TargetPlayerIntentSchema = z.object({
