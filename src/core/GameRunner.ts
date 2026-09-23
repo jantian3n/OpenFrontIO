@@ -272,6 +272,8 @@ export class GameRunner {
         canDemandSubjugation: player.canDemandSubjugation(other),
         pendingSubjectRequest,
         canReleaseSubject: player.isOverlordOf(other),
+        canRequestIndependence:
+          player.isSubjectOf(other) && player.canRequestIndependence(),
         canDeclareIndependence:
           player.isSubjectOf(other) && player.canDeclareIndependence(),
         canDonateGold: player.canDonateGold(other),

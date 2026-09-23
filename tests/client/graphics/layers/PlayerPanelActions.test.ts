@@ -60,6 +60,8 @@ const my = {
   clientID: () => "client-1",
   isLobbyCreator: () => false,
   isInSubjectRelation: () => false,
+  isSubjectOf: () => false,
+  autonomy: () => null,
 } as unknown as PlayerView;
 
 const other = {
@@ -70,6 +72,8 @@ const other = {
   clientID: () => "client-2",
   isLobbyCreator: () => false,
   isInSubjectRelation: () => false,
+  isSubjectOf: () => false,
+  autonomy: () => null,
 } as unknown as PlayerView;
 
 function makeGame() {

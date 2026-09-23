@@ -26,10 +26,10 @@ import {
   PlayerReportedEvent,
   SendAllianceRequestIntentEvent,
   SendBreakAllianceIntentEvent,
-  SendSubjectIntentEvent,
   SendEmbargoAllIntentEvent,
   SendEmbargoIntentEvent,
   SendEmojiIntentEvent,
+  SendSubjectIntentEvent,
   SendTargetPlayerIntentEvent,
 } from "../../Transport";
 import { UIState } from "../../UIState";
@@ -252,14 +252,13 @@ export class PlayerPanel extends LitElement implements Controller {
       | "accept"
       | "reject"
       | "release"
+      | "request_independence"
       | "independence",
     target?: PlayerView,
     requestType?: "protection" | "subjugation",
   ) {
     e.stopPropagation();
-    this.eventBus.emit(
-      new SendSubjectIntentEvent(action, target, requestType),
-    );
+    this.eventBus.emit(new SendSubjectIntentEvent(action, target, requestType));
     this.hide();
   }
 
@@ -921,6 +920,8 @@ export class PlayerPanel extends LitElement implements Controller {
     const pendingSubjectRequest =
       this.actions?.interaction?.pendingSubjectRequest;
     const canReleaseSubject = this.actions?.interaction?.canReleaseSubject;
+    const canRequestIndependence =
+      this.actions?.interaction?.canRequestIndependence;
     const canDeclareIndependence =
       this.actions?.interaction?.canDeclareIndependence;
     const canTarget = this.actions?.interaction?.canTarget;
@@ -998,14 +999,14 @@ export class PlayerPanel extends LitElement implements Controller {
                     })
                   : !isSubjectRelation
                     ? actionButton({
-                      onClick: (e: MouseEvent) =>
-                        this.handleStopEmbargoClick(e, my, other),
-                      icon: startTradingIcon,
-                      iconAlt: "Start Trading",
-                      title: translateText("player_panel.start_trade"),
-                      label: translateText("player_panel.start_trade"),
-                      type: "green",
-                    })
+                        onClick: (e: MouseEvent) =>
+                          this.handleStopEmbargoClick(e, my, other),
+                        icon: startTradingIcon,
+                        iconAlt: "Start Trading",
+                        title: translateText("player_panel.start_trade"),
+                        label: translateText("player_panel.start_trade"),
+                        type: "green",
+                      })
                     : ""}
                 ${canBreakAlliance
                   ? actionButton({
@@ -1070,8 +1071,12 @@ export class PlayerPanel extends LitElement implements Controller {
                         ),
                       icon: shieldIcon,
                       iconAlt: "Accept Subject Request",
-                      title: translateText("player_panel.accept_subject_request"),
-                      label: translateText("player_panel.accept_subject_request"),
+                      title: translateText(
+                        "player_panel.accept_subject_request",
+                      ),
+                      label: translateText(
+                        "player_panel.accept_subject_request",
+                      ),
                       type: "green",
                     })
                   : ""}
@@ -1086,8 +1091,12 @@ export class PlayerPanel extends LitElement implements Controller {
                         ),
                       icon: breakAllianceIcon,
                       iconAlt: "Reject Subject Request",
-                      title: translateText("player_panel.reject_subject_request"),
-                      label: translateText("player_panel.reject_subject_request"),
+                      title: translateText(
+                        "player_panel.reject_subject_request",
+                      ),
+                      label: translateText(
+                        "player_panel.reject_subject_request",
+                      ),
                       type: "red",
                     })
                   : ""}
@@ -1102,6 +1111,17 @@ export class PlayerPanel extends LitElement implements Controller {
                       type: "yellow",
                     })
                   : ""}
+                ${canRequestIndependence
+                  ? actionButton({
+                      onClick: (e: MouseEvent) =>
+                        this.handleSubjectAction(e, "request_independence"),
+                      icon: breakAllianceIcon,
+                      iconAlt: "Request Independence",
+                      title: translateText("player_panel.request_independence"),
+                      label: translateText("player_panel.request_independence"),
+                      type: "yellow",
+                    })
+                  : ""}
                 ${canDeclareIndependence
                   ? actionButton({
                       onClick: (e: MouseEvent) =>
@@ -1112,17 +1132,27 @@ export class PlayerPanel extends LitElement implements Controller {
                       label: translateText("player_panel.declare_independence"),
                       type: "red",
                     })
-                  : isMyOverlord
+                  : isMyOverlord && !canRequestIndependence
                     ? actionButton({
                         onClick: () => {},
                         icon: breakAllianceIcon,
-                        iconAlt: "Declare Independence",
-                        title: translateText(
-                          "player_panel.independence_requires_autonomy",
-                        ),
-                        label: translateText(
-                          "player_panel.independence_requires_autonomy",
-                        ),
+                        iconAlt: "Independence",
+                        title:
+                          (my.autonomy() ?? 0) < 80
+                            ? translateText(
+                                "player_panel.independence_request_requires_autonomy",
+                              )
+                            : translateText(
+                                "player_panel.independence_request_pending",
+                              ),
+                        label:
+                          (my.autonomy() ?? 0) < 80
+                            ? translateText(
+                                "player_panel.independence_request_requires_autonomy",
+                              )
+                            : translateText(
+                                "player_panel.independence_request_pending",
+                              ),
                         type: "red",
                         disabled: true,
                       })

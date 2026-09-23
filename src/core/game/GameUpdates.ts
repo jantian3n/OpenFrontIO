@@ -112,6 +112,8 @@ export enum GameUpdateType {
   SubjectRequestReply,
   ProtectionCall,
   ProtectionCallReply,
+  IndependenceRequest,
+  IndependenceRequestReply,
 }
 
 export type GameUpdate =
@@ -141,7 +143,9 @@ export type GameUpdate =
   | SubjectRequestUpdate
   | SubjectRequestReplyUpdate
   | ProtectionCallUpdate
-  | ProtectionCallReplyUpdate;
+  | ProtectionCallReplyUpdate
+  | IndependenceRequestUpdate
+  | IndependenceRequestReplyUpdate;
 
 export interface BonusEventUpdate {
   type: GameUpdateType.BonusEvent;
@@ -334,6 +338,20 @@ export interface ProtectionCallReplyUpdate {
   type: GameUpdateType.ProtectionCallReply;
   call: ProtectionCallUpdate;
   intervened: boolean;
+  cancelled?: boolean;
+}
+
+export interface IndependenceRequestUpdate {
+  type: GameUpdateType.IndependenceRequest;
+  subjectID: number;
+  overlordID: number;
+  createdAt: Tick;
+}
+
+export interface IndependenceRequestReplyUpdate {
+  type: GameUpdateType.IndependenceRequestReply;
+  request: IndependenceRequestUpdate;
+  accepted: boolean;
   cancelled?: boolean;
 }
 

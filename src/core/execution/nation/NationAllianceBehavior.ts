@@ -75,6 +75,32 @@ export class NationAllianceBehavior {
     }
   }
 
+  maybePursueIndependence(): boolean {
+    if (this.player.canDeclareIndependence()) {
+      return this.player.declareIndependence();
+    }
+    if (this.player.canRequestIndependence()) {
+      return this.player.requestIndependence();
+    }
+    return false;
+  }
+
+  handleIndependenceRequests() {
+    for (const subject of this.player.subjects()) {
+      if (!subject.hasPendingIndependenceRequest()) continue;
+
+      const info = subject.subjectInfo();
+      if (info === null) continue;
+
+      const accept =
+        info.autonomy >= 90 ||
+        subject.troops() >= this.player.troops() ||
+        subject.numTilesOwned() >= this.player.numTilesOwned();
+
+      this.player.respondToIndependenceRequest(subject, accept);
+    }
+  }
+
   handleSubjectRequests() {
     for (const request of this.player.incomingSubjectRequests()) {
       const requestor = request.requestor();
@@ -141,8 +167,7 @@ export class NationAllianceBehavior {
       )
       .sort(
         (a, b) =>
-          this.game.config().maxTroops(b) -
-          this.game.config().maxTroops(a),
+          this.game.config().maxTroops(b) - this.game.config().maxTroops(a),
       );
 
     if (candidates.length === 0) return false;

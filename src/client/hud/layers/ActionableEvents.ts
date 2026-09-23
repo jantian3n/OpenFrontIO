@@ -8,6 +8,8 @@ import {
   AllianceRequestUpdate,
   BrokeAllianceUpdate,
   GameUpdateType,
+  IndependenceRequestReplyUpdate,
+  IndependenceRequestUpdate,
   ProtectionCallReplyUpdate,
   ProtectionCallUpdate,
   SubjectRequestReplyUpdate,
@@ -77,6 +79,14 @@ export class ActionableEvents extends LitElement implements Controller {
     [
       GameUpdateType.ProtectionCallReply,
       this.onProtectionCallReplyEvent.bind(this),
+    ],
+    [
+      GameUpdateType.IndependenceRequest,
+      this.onIndependenceRequestEvent.bind(this),
+    ],
+    [
+      GameUpdateType.IndependenceRequestReply,
+      this.onIndependenceRequestReplyEvent.bind(this),
     ],
   ] as const;
 
@@ -345,6 +355,69 @@ export class ActionableEvents extends LitElement implements Controller {
       requestorID: update.requestorID,
       subjectRequestType: update.requestType,
     });
+  }
+
+  private onIndependenceRequestEvent(update: IndependenceRequestUpdate) {
+    const myPlayer = this.game.myPlayer();
+    if (!myPlayer || update.overlordID !== myPlayer.smallID()) return;
+
+    const subject = this.game.playerBySmallID(update.subjectID) as PlayerView;
+
+    this.addEvent({
+      description: translateText("events_display.independence_request", {
+        name: subject.displayName(),
+        autonomy: Math.round(subject.autonomy() ?? 0),
+      }),
+      buttons: [
+        {
+          text: translateText("events_display.focus"),
+          className: "btn-gray",
+          action: () => this.eventBus.emit(new GoToPlayerEvent(subject)),
+          preventClose: true,
+        },
+        {
+          text: translateText("events_display.accept_independence"),
+          className: "btn",
+          action: () =>
+            this.eventBus.emit(
+              new SendSubjectIntentEvent("accept_independence", subject),
+            ),
+        },
+        {
+          text: translateText("events_display.reject_independence"),
+          className: "btn-info",
+          action: () =>
+            this.eventBus.emit(
+              new SendSubjectIntentEvent("reject_independence", subject),
+            ),
+        },
+      ],
+      type: MessageType.INDEPENDENCE_REQUEST,
+      createdAt: update.createdAt,
+      priority: 1,
+      duration: this.game.config().allianceRequestDuration(),
+      focusID: update.subjectID,
+      requestorID: update.subjectID,
+    });
+  }
+
+  private onIndependenceRequestReplyEvent(
+    update: IndependenceRequestReplyUpdate,
+  ) {
+    const myPlayer = this.game.myPlayer();
+    if (!myPlayer || update.request.overlordID !== myPlayer.smallID()) return;
+
+    const remaining = this.events.filter(
+      (event) =>
+        !(
+          event.type === MessageType.INDEPENDENCE_REQUEST &&
+          event.focusID === update.request.subjectID
+        ),
+    );
+    if (remaining.length !== this.events.length) {
+      this.events = remaining;
+      this.requestUpdate();
+    }
   }
 
   private onProtectionCallEvent(update: ProtectionCallUpdate) {

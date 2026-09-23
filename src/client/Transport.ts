@@ -77,6 +77,9 @@ export class SendSubjectIntentEvent implements GameEvent {
       | "accept"
       | "reject"
       | "release"
+      | "request_independence"
+      | "accept_independence"
+      | "reject_independence"
       | "independence"
       | "intervene"
       | "decline_protection_call",

@@ -779,6 +779,10 @@ export interface Player {
     requestType: SubjectRequestType,
   ): boolean;
   releaseSubject(subject: Player): boolean;
+  hasPendingIndependenceRequest(): boolean;
+  canRequestIndependence(): boolean;
+  requestIndependence(): boolean;
+  respondToIndependenceRequest(subject: Player, accept: boolean): boolean;
   incomingProtectionCalls(): ProtectionCall[];
   raiseProtectionCall(attacker: Player): boolean;
   respondToProtectionCall(
@@ -1092,6 +1096,7 @@ export interface PlayerInteraction {
   canDemandSubjugation: boolean;
   pendingSubjectRequest?: SubjectRequestType;
   canReleaseSubject: boolean;
+  canRequestIndependence: boolean;
   canDeclareIndependence: boolean;
   canTarget: boolean;
   canDonateGold: boolean;
@@ -1132,6 +1137,7 @@ export enum MessageType {
   CHAT,
   RENEW_ALLIANCE,
   PROTECTION_CALL,
+  INDEPENDENCE_REQUEST,
 }
 
 // Message categories used for filtering events in the EventsDisplay
@@ -1165,6 +1171,7 @@ export const MESSAGE_TYPE_CATEGORIES: Record<MessageType, MessageCategory> = {
   [MessageType.ALLIANCE_EXPIRED]: MessageCategory.ALLIANCE,
   [MessageType.SUBJECT_REQUEST]: MessageCategory.ALLIANCE,
   [MessageType.PROTECTION_CALL]: MessageCategory.ALLIANCE,
+  [MessageType.INDEPENDENCE_REQUEST]: MessageCategory.ALLIANCE,
   [MessageType.RENEW_ALLIANCE]: MessageCategory.ALLIANCE,
   [MessageType.DONATION_SENT]: MessageCategory.TRADE,
   [MessageType.DONATION_RECEIVED]: MessageCategory.TRADE,

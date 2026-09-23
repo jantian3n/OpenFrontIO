@@ -372,8 +372,8 @@ export class GameImpl implements Game {
     requestor: Player,
     recipient: Player,
   ): AllianceRequest | null {
-    if (!requestor.canSendAllianceRequest(recipient)) {
-      console.log("cannot request alliance under current diplomacy rules");
+    if (requestor.isPuppet() || recipient.isPuppet()) {
+      console.log("cannot request alliance involving a puppet");
       return null;
     }
     if (requestor.isAlliedWith(recipient)) {

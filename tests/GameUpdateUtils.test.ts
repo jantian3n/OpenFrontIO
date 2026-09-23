@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PlayerState } from "../src/client/render/types";
-import { PlayerType } from "../src/core/game/Game";
+import { PlayerType, SubjectRelationKind } from "../src/core/game/Game";
 import {
   applyStateUpdate,
   diffPlayerUpdate,
@@ -155,7 +155,7 @@ describe("diffPlayerUpdate", () => {
     const prev = makePlayerUpdate();
     const next = makePlayerUpdate({
       overlord: 7,
-      subjectKind: "protectorate",
+      subjectKind: SubjectRelationKind.Protectorate,
       subjectOrigin: "protection",
       subjectCreatedAt: 123,
       autonomy: 60,
@@ -176,9 +176,7 @@ describe("diffPlayerUpdate", () => {
     expect(diff.subjectCreatedAt).toBe(123);
     expect(diff.autonomy).toBe(60);
     expect(diff.tributeRate).toBe(10);
-    expect(diff.outgoingSubjectRequests).toEqual(
-      next.outgoingSubjectRequests,
-    );
+    expect(diff.outgoingSubjectRequests).toEqual(next.outgoingSubjectRequests);
 
     const state = makePlayerState();
     applyStateUpdate(state, diff);
@@ -187,9 +185,7 @@ describe("diffPlayerUpdate", () => {
     expect(state.subjectOrigin).toBe("protection");
     expect(state.autonomy).toBe(60);
     expect(state.tributeRate).toBe(10);
-    expect(state.outgoingSubjectRequests).toEqual(
-      next.outgoingSubjectRequests,
-    );
+    expect(state.outgoingSubjectRequests).toEqual(next.outgoingSubjectRequests);
     expect(state.outgoingSubjectRequests).not.toBe(
       next.outgoingSubjectRequests,
     );

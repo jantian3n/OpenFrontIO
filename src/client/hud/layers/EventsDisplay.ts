@@ -13,6 +13,7 @@ import {
   DonateEventUpdate,
   EmojiUpdate,
   GameUpdateType,
+  IndependenceRequestReplyUpdate,
   ProtectionCallReplyUpdate,
   SubjectRequestReplyUpdate,
   TargetPlayerUpdate,
@@ -62,6 +63,7 @@ const TIER_1_TYPES: ReadonlySet<MessageType> = new Set([
   MessageType.RENEW_ALLIANCE,
   MessageType.SUBJECT_REQUEST,
   MessageType.PROTECTION_CALL,
+  MessageType.INDEPENDENCE_REQUEST,
   MessageType.CONQUERED_PLAYER,
   MessageType.CHAT,
   MessageType.DONATION_RECEIVED,
@@ -151,6 +153,10 @@ export class EventsDisplay extends LitElement implements Controller {
     [
       GameUpdateType.ProtectionCallReply,
       this.onProtectionCallReplyEvent.bind(this),
+    ],
+    [
+      GameUpdateType.IndependenceRequestReply,
+      this.onIndependenceRequestReplyEvent.bind(this),
     ],
   ] as const;
 
@@ -468,6 +474,32 @@ export class EventsDisplay extends LitElement implements Controller {
       highlight: true,
       createdAt: this.game.ticks(),
       focusID: other.smallID(),
+    });
+  }
+
+  private onIndependenceRequestReplyEvent(
+    update: IndependenceRequestReplyUpdate,
+  ) {
+    const myPlayer = this.game.myPlayer();
+    if (!myPlayer || update.request.subjectID !== myPlayer.smallID()) return;
+    if (update.cancelled) return;
+
+    const overlord = this.game.playerBySmallID(
+      update.request.overlordID,
+    ) as PlayerView;
+
+    this.addEvent({
+      description: update.accepted
+        ? translateText("events_display.independence_request_accepted", {
+            name: overlord.displayName(),
+          })
+        : translateText("events_display.independence_request_rejected", {
+            name: overlord.displayName(),
+          }),
+      type: MessageType.INDEPENDENCE_REQUEST,
+      highlight: true,
+      createdAt: this.game.ticks(),
+      focusID: overlord.smallID(),
     });
   }
 

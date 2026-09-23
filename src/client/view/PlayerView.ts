@@ -609,8 +609,7 @@ export class PlayerView {
 
   isPuppet(): boolean {
     return (
-      this.isSubject() &&
-      this.state.subjectKind === SubjectRelationKind.Puppet
+      this.isSubject() && this.state.subjectKind === SubjectRelationKind.Puppet
     );
   }
 
