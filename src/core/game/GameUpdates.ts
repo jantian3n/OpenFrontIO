@@ -9,6 +9,8 @@ import {
   PlayerID,
   PlayerType,
   SamLauncherState,
+  SubjectRelationKind,
+  SubjectRequestType,
   Team,
   Tick,
   TrainType,
@@ -106,6 +108,8 @@ export enum GameUpdateType {
   SpawnPhaseEnd,
   GamePaused,
   DonateEvent,
+  SubjectRequest,
+  SubjectRequestReply,
 }
 
 export type GameUpdate =
@@ -131,7 +135,9 @@ export type GameUpdate =
   | EmbargoUpdate
   | SpawnPhaseEndUpdate
   | GamePausedUpdate
-  | DonateEventUpdate;
+  | DonateEventUpdate
+  | SubjectRequestUpdate
+  | SubjectRequestReplyUpdate;
 
 export interface BonusEventUpdate {
   type: GameUpdateType.BonusEvent;
@@ -257,8 +263,14 @@ export interface PlayerUpdate {
   overlord?: number | null;
   /** Direct subject smallIDs controlled by this player. */
   subjects?: number[];
-  /** Player IDs currently asked to become this player's subject. */
-  outgoingPuppetRequests?: PlayerID[];
+  /** Metadata for this player's own subject relationship, null when sovereign. */
+  subjectKind?: SubjectRelationKind | null;
+  subjectOrigin?: SubjectRequestType | null;
+  subjectCreatedAt?: Tick | null;
+  autonomy?: number | null;
+  tributeRate?: number | null;
+  /** Pending subject requests sent by this player. */
+  outgoingSubjectRequests?: SubjectRequestView[];
   embargoes?: Set<PlayerID>;
   isTraitor?: boolean;
   traitorRemainingTicks?: number;
@@ -284,6 +296,26 @@ export interface AllianceView {
   createdAt: Tick;
   expiresAt: Tick;
   hasExtensionRequest: boolean;
+}
+
+export interface SubjectRequestView {
+  recipientID: PlayerID;
+  requestType: SubjectRequestType;
+  createdAt: Tick;
+}
+
+export interface SubjectRequestUpdate {
+  type: GameUpdateType.SubjectRequest;
+  requestorID: number;
+  recipientID: number;
+  requestType: SubjectRequestType;
+  createdAt: Tick;
+}
+
+export interface SubjectRequestReplyUpdate {
+  type: GameUpdateType.SubjectRequestReply;
+  request: SubjectRequestUpdate;
+  accepted: boolean;
 }
 
 export interface AllianceRequestUpdate {
