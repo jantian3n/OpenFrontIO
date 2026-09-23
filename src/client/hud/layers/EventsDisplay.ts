@@ -174,13 +174,17 @@ export class EventsDisplay extends LitElement implements Controller {
       return;
     }
 
+    const description =
+      e.action === "request_protection"
+        ? translateText("events_display.protection_request_sent", {
+            name: e.target.displayName(),
+          })
+        : translateText("events_display.subjugation_demand_sent", {
+            name: e.target.displayName(),
+          });
+
     this.addEvent({
-      description: translateText(
-        e.action === "request_protection"
-          ? "events_display.protection_request_sent"
-          : "events_display.subjugation_demand_sent",
-        { name: e.target.displayName() },
-      ),
+      description,
       type: MessageType.SUBJECT_REQUEST,
       createdAt: this.game.ticks(),
       focusID: e.target.smallID(),
@@ -433,17 +437,27 @@ export class EventsDisplay extends LitElement implements Controller {
     const other = this.game.playerBySmallID(
       update.request.recipientID,
     ) as PlayerView;
-    const key =
-      update.request.requestType === "protection"
-        ? update.accepted
-          ? "events_display.protection_request_accepted"
-          : "events_display.protection_request_rejected"
-        : update.accepted
-          ? "events_display.subjugation_demand_accepted"
-          : "events_display.subjugation_demand_rejected";
+    let description: string;
+    if (update.request.requestType === "protection") {
+      description = update.accepted
+        ? translateText("events_display.protection_request_accepted", {
+            name: other.displayName(),
+          })
+        : translateText("events_display.protection_request_rejected", {
+            name: other.displayName(),
+          });
+    } else {
+      description = update.accepted
+        ? translateText("events_display.subjugation_demand_accepted", {
+            name: other.displayName(),
+          })
+        : translateText("events_display.subjugation_demand_rejected", {
+            name: other.displayName(),
+          });
+    }
 
     this.addEvent({
-      description: translateText(key, { name: other.displayName() }),
+      description,
       type: MessageType.SUBJECT_REQUEST,
       highlight: true,
       createdAt: this.game.ticks(),
