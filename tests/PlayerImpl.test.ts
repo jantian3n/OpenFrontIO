@@ -323,24 +323,47 @@ describe("PlayerImpl", () => {
       expect(other.subjectInfo()).toBeNull();
     });
 
-    test("subject needs sufficient autonomy to declare independence", () => {
+    test("80 autonomy allows an independence request, 100 allows peaceful independence", () => {
       makePlayerDominant();
       expect(other.requestProtection(player)).toBe(true);
       expect(player.acceptSubjectRequest(other, "protection")).toBe(true);
 
       expect(other.subjectInfo()?.autonomy).toBe(60);
+      expect(other.canRequestIndependence(player)).toBe(false);
       expect(other.canDeclareIndependence()).toBe(false);
-      expect(other.declareIndependence()).toBe(false);
 
-      // Model the end of a successful autonomy buildup without coupling this
-      // focused lifecycle test to hundreds of simulation ticks.
       (other as any)._subjectInfo.autonomy = 80;
+
+      expect(other.canRequestIndependence(player)).toBe(true);
+      expect(other.requestIndependence(player)).toBe(true);
+      expect(
+        other.isRequestingSubjectRelation(player, "independence"),
+      ).toBe(true);
+      expect(other.canDeclareIndependence()).toBe(false);
+
+      expect(player.rejectSubjectRequest(other, "independence")).toBe(true);
+      expect(other.isSubject()).toBe(true);
+
+      (other as any)._subjectInfo.autonomy = 100;
 
       expect(other.canDeclareIndependence()).toBe(true);
       expect(other.declareIndependence()).toBe(true);
       expect(other.isSubject()).toBe(false);
       expect(player.isOverlordOf(other)).toBe(false);
-      expect(other.isFriendly(player)).toBe(false);
+      expect(other.relation(player)).not.toBe(Relation.Hostile);
+    });
+
+    test("overlord can accept an independence request at 80 autonomy", () => {
+      makePlayerDominant();
+      expect(other.requestProtection(player)).toBe(true);
+      expect(player.acceptSubjectRequest(other, "protection")).toBe(true);
+
+      (other as any)._subjectInfo.autonomy = 80;
+
+      expect(other.requestIndependence(player)).toBe(true);
+      expect(player.acceptSubjectRequest(other, "independence")).toBe(true);
+      expect(other.isSubject()).toBe(false);
+      expect(player.isOverlordOf(other)).toBe(false);
     });
 
     test("protectorate pays tribute on newly earned gold", () => {
