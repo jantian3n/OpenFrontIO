@@ -827,6 +827,7 @@ export interface Player {
   canAttackPlayer(player: Player, treatAFKFriendly?: boolean): boolean;
   recordAggressionAgainst(player: Player): void;
   hasRecentAggressionAgainst(player: Player): boolean;
+  registerHostileActionAgainst(player: Player): void;
   isImmune(): boolean;
 
   createAttack(
