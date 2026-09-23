@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PlayerState } from "../src/client/render/types";
-import { PlayerType } from "../src/core/game/Game";
+import { PlayerType, SubjectRelationKind } from "../src/core/game/Game";
 import {
   applyStateUpdate,
   diffPlayerUpdate,
@@ -155,7 +155,7 @@ describe("diffPlayerUpdate", () => {
     const prev = makePlayerUpdate();
     const next = makePlayerUpdate({
       overlord: 7,
-      subjectKind: "protectorate",
+      subjectKind: SubjectRelationKind.Protectorate,
       subjectOrigin: "protection",
       subjectCreatedAt: 123,
       autonomy: 60,
