@@ -26,10 +26,10 @@ import {
   PlayerReportedEvent,
   SendAllianceRequestIntentEvent,
   SendBreakAllianceIntentEvent,
-  SendSubjectIntentEvent,
   SendEmbargoAllIntentEvent,
   SendEmbargoIntentEvent,
   SendEmojiIntentEvent,
+  SendSubjectIntentEvent,
   SendTargetPlayerIntentEvent,
 } from "../../Transport";
 import { UIState } from "../../UIState";
@@ -258,9 +258,7 @@ export class PlayerPanel extends LitElement implements Controller {
     requestType?: "protection" | "subjugation",
   ) {
     e.stopPropagation();
-    this.eventBus.emit(
-      new SendSubjectIntentEvent(action, target, requestType),
-    );
+    this.eventBus.emit(new SendSubjectIntentEvent(action, target, requestType));
     this.hide();
   }
 
@@ -1001,14 +999,14 @@ export class PlayerPanel extends LitElement implements Controller {
                     })
                   : !isSubjectRelation
                     ? actionButton({
-                      onClick: (e: MouseEvent) =>
-                        this.handleStopEmbargoClick(e, my, other),
-                      icon: startTradingIcon,
-                      iconAlt: "Start Trading",
-                      title: translateText("player_panel.start_trade"),
-                      label: translateText("player_panel.start_trade"),
-                      type: "green",
-                    })
+                        onClick: (e: MouseEvent) =>
+                          this.handleStopEmbargoClick(e, my, other),
+                        icon: startTradingIcon,
+                        iconAlt: "Start Trading",
+                        title: translateText("player_panel.start_trade"),
+                        label: translateText("player_panel.start_trade"),
+                        type: "green",
+                      })
                     : ""}
                 ${canBreakAlliance
                   ? actionButton({
@@ -1073,8 +1071,12 @@ export class PlayerPanel extends LitElement implements Controller {
                         ),
                       icon: shieldIcon,
                       iconAlt: "Accept Subject Request",
-                      title: translateText("player_panel.accept_subject_request"),
-                      label: translateText("player_panel.accept_subject_request"),
+                      title: translateText(
+                        "player_panel.accept_subject_request",
+                      ),
+                      label: translateText(
+                        "player_panel.accept_subject_request",
+                      ),
                       type: "green",
                     })
                   : ""}
@@ -1089,8 +1091,12 @@ export class PlayerPanel extends LitElement implements Controller {
                         ),
                       icon: breakAllianceIcon,
                       iconAlt: "Reject Subject Request",
-                      title: translateText("player_panel.reject_subject_request"),
-                      label: translateText("player_panel.reject_subject_request"),
+                      title: translateText(
+                        "player_panel.reject_subject_request",
+                      ),
+                      label: translateText(
+                        "player_panel.reject_subject_request",
+                      ),
                       type: "red",
                     })
                   : ""}
