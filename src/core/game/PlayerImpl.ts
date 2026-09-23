@@ -988,7 +988,15 @@ export class PlayerImpl implements Player {
     );
   }
 
+  private pruneExpiredSubjectRequests(): void {
+    const duration = this.mg.config().allianceRequestDuration();
+    this._outgoingSubjectRequests = this._outgoingSubjectRequests.filter(
+      (request) => this.mg.ticks() - request.createdAt() < duration,
+    );
+  }
+
   outgoingSubjectRequests(): SubjectRequest[] {
+    this.pruneExpiredSubjectRequests();
     return [...this._outgoingSubjectRequests];
   }
 
