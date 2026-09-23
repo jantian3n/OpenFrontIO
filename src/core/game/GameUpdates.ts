@@ -110,6 +110,8 @@ export enum GameUpdateType {
   DonateEvent,
   SubjectRequest,
   SubjectRequestReply,
+  ProtectionCall,
+  ProtectionCallReply,
 }
 
 export type GameUpdate =
@@ -137,7 +139,9 @@ export type GameUpdate =
   | GamePausedUpdate
   | DonateEventUpdate
   | SubjectRequestUpdate
-  | SubjectRequestReplyUpdate;
+  | SubjectRequestReplyUpdate
+  | ProtectionCallUpdate
+  | ProtectionCallReplyUpdate;
 
 export interface BonusEventUpdate {
   type: GameUpdateType.BonusEvent;
@@ -316,6 +320,20 @@ export interface SubjectRequestReplyUpdate {
   type: GameUpdateType.SubjectRequestReply;
   request: SubjectRequestUpdate;
   accepted: boolean;
+}
+
+export interface ProtectionCallUpdate {
+  type: GameUpdateType.ProtectionCall;
+  overlordID: number;
+  subjectID: number;
+  attackerID: number;
+  createdAt: Tick;
+}
+
+export interface ProtectionCallReplyUpdate {
+  type: GameUpdateType.ProtectionCallReply;
+  call: ProtectionCallUpdate;
+  intervened: boolean;
 }
 
 export interface AllianceRequestUpdate {
