@@ -111,6 +111,7 @@ class ProtectionCallRecord implements ProtectionCall {
 const SUBJECT_TRIBUTE_INTERVAL_TICKS = 300;
 const SUBJECT_AUTONOMY_INTERVAL_TICKS = 600;
 const SUBJECT_INDEPENDENCE_AUTONOMY = 80;
+const SUBJECT_PROTECTION_OUTCOME_COOLDOWN_TICKS = 300;
 // A state that starts a conflict cannot immediately turn the opponent's
 // retaliation into a protection claim. Active attacks extend this implicitly.
 const PROTECTION_AGGRESSION_MEMORY_TICKS = 600;
@@ -209,6 +210,7 @@ export class PlayerImpl implements Player {
   private _pendingProtectionCalls: ProtectionCallRecord[] = [];
   private _lastProtectionCallTick = new Map<string, Tick>();
   private _lastAggressionTick = new Map<PlayerID, Tick>();
+  private _lastProtectionOutcomeTick: Tick = -1;
   private _subjectLastGoldEarned: Gold = 0n;
   private _lastSubjectEconomyTick: Tick = -1;
   private _lastSubjectAutonomyTick: Tick = -1;
@@ -1227,6 +1229,7 @@ export class PlayerImpl implements Player {
     subject._subjectLastGoldEarned = subject._goldEarned;
     subject._lastSubjectEconomyTick = this.mg.ticks();
     subject._lastSubjectAutonomyTick = this.mg.ticks();
+    subject._lastProtectionOutcomeTick = -1;
     subject._subjectInfo =
       requestType === "protection"
         ? {
@@ -1258,6 +1261,21 @@ export class PlayerImpl implements Player {
       request: request.toUpdate(),
       accepted: true,
     });
+
+    // If protection is granted while the applicant is already under attack,
+    // the guarantee applies immediately to those existing defensive wars.
+    if (requestType === "protection") {
+      const currentAttackers = new Set<Player>();
+      for (const attack of subject.incomingAttacks()) {
+        if (!attack.isActive()) continue;
+        const attacker = attack.attacker();
+        if (attacker !== overlord) currentAttackers.add(attacker);
+      }
+      for (const attacker of currentAttackers) {
+        subject.raiseProtectionCall(attacker);
+      }
+    }
+
     return true;
   }
 
@@ -1290,6 +1308,7 @@ export class PlayerImpl implements Player {
     subjectImpl._subjectInfo = null;
     subjectImpl._lastSubjectEconomyTick = -1;
     subjectImpl._lastSubjectAutonomyTick = -1;
+    subjectImpl._lastProtectionOutcomeTick = -1;
     this._pendingProtectionCalls = this._pendingProtectionCalls.filter(
       (call) => call.subject() !== subject,
     );
@@ -1300,14 +1319,41 @@ export class PlayerImpl implements Player {
     return `${subject.id()}|${attacker.id()}`;
   }
 
+  private canApplyProtectionOutcome(subject: PlayerImpl): boolean {
+    return (
+      subject._lastProtectionOutcomeTick < 0 ||
+      this.mg.ticks() - subject._lastProtectionOutcomeTick >=
+        SUBJECT_PROTECTION_OUTCOME_COOLDOWN_TICKS
+    );
+  }
+
   private applyProtectionDecline(subject: PlayerImpl): void {
     if (subject._subjectInfo === null) return;
+    if (!this.canApplyProtectionOutcome(subject)) return;
+
+    subject._lastProtectionOutcomeTick = this.mg.ticks();
     const autonomyGain =
       subject._subjectInfo.kind === SubjectRelationKind.Protectorate ? 10 : 5;
+    const relationLoss =
+      subject._subjectInfo.kind === SubjectRelationKind.Protectorate ? -25 : -15;
+
     subject._subjectInfo.autonomy = Math.min(
       100,
       subject._subjectInfo.autonomy + autonomyGain,
     );
+    subject.updateRelation(this, relationLoss);
+  }
+
+  private applyProtectionHonor(subject: PlayerImpl): void {
+    if (subject._subjectInfo === null) return;
+    if (!this.canApplyProtectionOutcome(subject)) return;
+
+    subject._lastProtectionOutcomeTick = this.mg.ticks();
+    subject._subjectInfo.autonomy = Math.max(
+      0,
+      subject._subjectInfo.autonomy - 2,
+    );
+    subject.updateRelation(this, 10);
   }
 
   private expireProtectionCalls(): void {
@@ -1425,12 +1471,7 @@ export class PlayerImpl implements Player {
         this.target(attacker);
       }
 
-      if (subjectImpl._subjectInfo !== null) {
-        subjectImpl._subjectInfo.autonomy = Math.max(
-          0,
-          subjectImpl._subjectInfo.autonomy - 2,
-        );
-      }
+      this.applyProtectionHonor(subjectImpl);
     } else {
       this.applyProtectionDecline(subjectImpl);
     }
@@ -1530,6 +1571,7 @@ export class PlayerImpl implements Player {
     this._subjectInfo = null;
     this._lastSubjectEconomyTick = -1;
     this._lastSubjectAutonomyTick = -1;
+    this._lastProtectionOutcomeTick = -1;
     this.updateRelation(overlord, -100);
     overlord.updateRelation(this, -100);
     return true;
