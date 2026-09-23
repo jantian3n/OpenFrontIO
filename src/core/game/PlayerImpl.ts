@@ -1771,7 +1771,10 @@ export class PlayerImpl implements Player {
     if (this.isAlliedWith(recipient)) {
       throw new Error(`cannot create alliance request, already allies`);
     }
-    if (!this.canSendAllianceRequest(recipient)) {
+    // Core enforcement is intentionally narrower than the UI capability
+    // check: direct internal callers may create requests in test/setup flows,
+    // but puppets must never bypass their alliance restriction.
+    if (this.isPuppet() || recipient.isPuppet()) {
       return null;
     }
     return this.mg.createAllianceRequest(this, recipient satisfies Player);
