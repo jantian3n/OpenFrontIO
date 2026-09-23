@@ -2579,6 +2579,21 @@ export class PlayerImpl implements Player {
     );
   }
 
+  registerHostileActionAgainst(player: Player): void {
+    if (player === this) return;
+
+    const activeRetaliation = this.incomingAttacks().some(
+      (incoming) =>
+        incoming.isActive() &&
+        incoming.attacker() === player,
+    );
+    const recentRetaliation = player.hasRecentAggressionAgainst(this);
+
+    if (!activeRetaliation && !recentRetaliation) {
+      this.recordAggressionAgainst(player);
+    }
+  }
+
   public canAttackPlayer(
     player: Player,
     treatAFKFriendly: boolean = false,
