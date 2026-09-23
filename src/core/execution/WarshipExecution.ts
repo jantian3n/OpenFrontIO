@@ -639,12 +639,20 @@ export class WarshipExecution implements Execution {
         // Warships don't need to reload when attacking transport ships.
         this.lastShellAttack = this.mg.ticks();
       }
+      const targetUnit = this.warship.targetUnit()!;
+      const attacker = this.warship.owner();
+      const defender = targetUnit.owner();
+      if (attacker !== defender) {
+        attacker.registerHostileActionAgainst(defender);
+        defender.raiseProtectionCall(attacker);
+      }
+
       this.mg.addExecution(
         new ShellExecution(
           this.warship.tile(),
-          this.warship.owner(),
+          attacker,
           this.warship,
-          this.warship.targetUnit()!,
+          targetUnit,
         ),
       );
       if (!this.warship.targetUnit()!.hasHealth()) {
