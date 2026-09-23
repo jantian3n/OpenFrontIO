@@ -3,6 +3,7 @@ import {
   Player,
   PlayerInfo,
   PlayerType,
+  SubjectRelationKind,
   UnitType,
 } from "../src/core/game/Game";
 import { setup } from "./util/Setup";
@@ -144,48 +145,94 @@ describe("PlayerImpl", () => {
     expect(other.canSendAllianceRequest(player)).toBe(false);
   });
 
-  describe("puppet diplomacy", () => {
-    test("request can be accepted and makes both players friendly", () => {
-      expect(player.requestPuppet(other)).toBe(true);
-      expect(player.isRequestingPuppetOf(other)).toBe(true);
+  describe("subject diplomacy", () => {
+    function makePlayerDominant() {
+      player.addTroops(Math.max(100_000, other.troops() * 5));
+      for (let x = 1; x <= 20; x++) {
+        player.conquer(game.ref(x, 0));
+      }
+    }
 
-      expect(other.acceptPuppetRequest(player)).toBe(true);
+    test("similarly strong players cannot create a subject relation", () => {
+      expect(player.canDemandSubjugation(other)).toBe(false);
+      expect(other.canRequestProtection(player)).toBe(false);
+    });
+
+    test("strong player can demand subjugation", () => {
+      makePlayerDominant();
+
+      expect(player.demandSubjugation(other)).toBe(true);
+      expect(
+        player.isRequestingSubjectRelation(other, "subjugation"),
+      ).toBe(true);
+
+      expect(other.acceptSubjectRequest(player, "subjugation")).toBe(true);
       expect(other.isPuppetOf(player)).toBe(true);
       expect(player.isOverlordOf(other)).toBe(true);
+      expect(other.subjectInfo()).toMatchObject({
+        kind: SubjectRelationKind.Puppet,
+        origin: "subjugation",
+        autonomy: 40,
+        tributeRate: 20,
+      });
       expect(player.isFriendly(other)).toBe(true);
       expect(other.isFriendly(player)).toBe(true);
       expect(player.canTarget(other)).toBe(false);
       expect(other.canTarget(player)).toBe(false);
     });
 
-    test("request can be rejected", () => {
-      expect(player.requestPuppet(other)).toBe(true);
-      expect(other.rejectPuppetRequest(player)).toBe(true);
-      expect(player.isRequestingPuppetOf(other)).toBe(false);
-      expect(other.isPuppet()).toBe(false);
+    test("weak player can seek protection from a stronger player", () => {
+      makePlayerDominant();
+
+      expect(other.requestProtection(player)).toBe(true);
+      expect(
+        other.isRequestingSubjectRelation(player, "protection"),
+      ).toBe(true);
+
+      expect(player.acceptSubjectRequest(other, "protection")).toBe(true);
+      expect(other.isProtectorate()).toBe(true);
+      expect(other.isSubjectOf(player)).toBe(true);
+      expect(other.subjectInfo()).toMatchObject({
+        kind: SubjectRelationKind.Protectorate,
+        origin: "protection",
+        autonomy: 60,
+        tributeRate: 10,
+      });
+    });
+
+    test("subject request can be rejected", () => {
+      makePlayerDominant();
+      expect(other.requestProtection(player)).toBe(true);
+      expect(player.rejectSubjectRequest(other, "protection")).toBe(true);
+      expect(other.outgoingSubjectRequests()).toHaveLength(0);
+      expect(other.isSubject()).toBe(false);
     });
 
     test("overlord can release a subject", () => {
-      expect(player.requestPuppet(other)).toBe(true);
-      expect(other.acceptPuppetRequest(player)).toBe(true);
-      expect(player.releasePuppet(other)).toBe(true);
+      makePlayerDominant();
+      expect(player.demandSubjugation(other)).toBe(true);
+      expect(other.acceptSubjectRequest(player, "subjugation")).toBe(true);
+      expect(player.releaseSubject(other)).toBe(true);
       expect(player.isOverlordOf(other)).toBe(false);
       expect(other.overlord()).toBeNull();
+      expect(other.subjectInfo()).toBeNull();
     });
 
     test("subject can declare independence", () => {
-      expect(player.requestPuppet(other)).toBe(true);
-      expect(other.acceptPuppetRequest(player)).toBe(true);
+      makePlayerDominant();
+      expect(other.requestProtection(player)).toBe(true);
+      expect(player.acceptSubjectRequest(other, "protection")).toBe(true);
       expect(other.declareIndependence()).toBe(true);
-      expect(other.isPuppet()).toBe(false);
+      expect(other.isSubject()).toBe(false);
       expect(player.isOverlordOf(other)).toBe(false);
       expect(other.isFriendly(player)).toBe(false);
     });
 
-    test("reciprocal demands are blocked while a request is pending", () => {
-      expect(player.requestPuppet(other)).toBe(true);
-      expect(other.canSendPuppetRequest(player)).toBe(false);
-      expect(other.requestPuppet(player)).toBe(false);
+    test("reciprocal subject requests are blocked while one is pending", () => {
+      makePlayerDominant();
+      expect(player.demandSubjugation(other)).toBe(true);
+      expect(other.canRequestProtection(player)).toBe(false);
+      expect(other.requestProtection(player)).toBe(false);
     });
   });
 
