@@ -175,7 +175,8 @@ export class EventsDisplay extends LitElement implements Controller {
     if (!myPlayer || !e.target) return;
     if (
       e.action !== "request_protection" &&
-      e.action !== "demand_subjugation"
+      e.action !== "demand_subjugation" &&
+      e.action !== "request_independence"
     ) {
       return;
     }
@@ -185,9 +186,13 @@ export class EventsDisplay extends LitElement implements Controller {
         ? translateText("events_display.protection_request_sent", {
             name: e.target.displayName(),
           })
-        : translateText("events_display.subjugation_demand_sent", {
-            name: e.target.displayName(),
-          });
+        : e.action === "demand_subjugation"
+          ? translateText("events_display.subjugation_demand_sent", {
+              name: e.target.displayName(),
+            })
+          : translateText("events_display.independence_request_sent", {
+              name: e.target.displayName(),
+            });
 
     this.addEvent({
       description,
@@ -452,12 +457,20 @@ export class EventsDisplay extends LitElement implements Controller {
         : translateText("events_display.protection_request_rejected", {
             name: other.displayName(),
           });
-    } else {
+    } else if (update.request.requestType === "subjugation") {
       description = update.accepted
         ? translateText("events_display.subjugation_demand_accepted", {
             name: other.displayName(),
           })
         : translateText("events_display.subjugation_demand_rejected", {
+            name: other.displayName(),
+          });
+    } else {
+      description = update.accepted
+        ? translateText("events_display.independence_request_accepted", {
+            name: other.displayName(),
+          })
+        : translateText("events_display.independence_request_rejected", {
             name: other.displayName(),
           });
     }
