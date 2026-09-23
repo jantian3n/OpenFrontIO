@@ -86,6 +86,9 @@ export interface PlayerState {
   spawnTile?: number;
   lastDeleteUnitTick: number;
   allies: number[];
+  overlord: number | null;
+  subjects: number[];
+  outgoingPuppetRequests: string[];
   embargoes: number[];
   targets: number[];
   outgoingAttacks: AttackData[];
