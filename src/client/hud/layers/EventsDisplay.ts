@@ -61,6 +61,7 @@ const TIER_1_TYPES: ReadonlySet<MessageType> = new Set([
   MessageType.ALLIANCE_BROKEN,
   MessageType.RENEW_ALLIANCE,
   MessageType.SUBJECT_REQUEST,
+  MessageType.PROTECTION_CALL,
   MessageType.CONQUERED_PLAYER,
   MessageType.CHAT,
   MessageType.DONATION_RECEIVED,
