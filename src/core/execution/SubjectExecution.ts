@@ -12,17 +12,21 @@ export type SubjectAction =
   | "accept"
   | "reject"
   | "release"
-  | "independence";
+  | "independence"
+  | "intervene"
+  | "decline_protection_call";
 
 export class SubjectExecution implements Execution {
   private active = true;
   private target: Player | null = null;
+  private subject: Player | null = null;
 
   constructor(
     private readonly player: Player,
     private readonly action: SubjectAction,
     private readonly targetID?: PlayerID,
     private readonly requestType?: SubjectRequestType,
+    private readonly subjectID?: PlayerID,
   ) {}
 
   init(mg: Game, _: number): void {
@@ -37,6 +41,20 @@ export class SubjectExecution implements Execution {
     }
 
     this.target = mg.player(this.targetID);
+
+    if (
+      this.action === "intervene" ||
+      this.action === "decline_protection_call"
+    ) {
+      if (this.subjectID === undefined || !mg.hasPlayer(this.subjectID)) {
+        console.warn(
+          `[SubjectExecution] subject ${this.subjectID ?? "<missing>"} not found for ${this.action}`,
+        );
+        this.active = false;
+        return;
+      }
+      this.subject = mg.player(this.subjectID);
+    }
   }
 
   tick(_: number): void {
@@ -70,6 +88,26 @@ export class SubjectExecution implements Execution {
         break;
       case "independence":
         success = this.player.declareIndependence();
+        break;
+      case "intervene":
+        success =
+          this.target !== null &&
+          this.subject !== null &&
+          this.player.respondToProtectionCall(
+            this.subject,
+            this.target,
+            true,
+          );
+        break;
+      case "decline_protection_call":
+        success =
+          this.target !== null &&
+          this.subject !== null &&
+          this.player.respondToProtectionCall(
+            this.subject,
+            this.target,
+            false,
+          );
         break;
     }
 
