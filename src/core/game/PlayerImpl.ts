@@ -1075,7 +1075,6 @@ export class PlayerImpl implements Player {
     if (subject.isDisconnected() || overlord.isDisconnected()) return false;
     if (subject.isSubject() || subject.subjects().length > 0) return false;
     if (overlord.isSubject()) return false;
-    if (subject.isAlliedWith(overlord)) return false;
     if (
       requirePeace &&
       (subject as PlayerImpl).isActivelyFighting(overlord)
@@ -1185,6 +1184,11 @@ export class PlayerImpl implements Player {
       return false;
     }
 
+    const directAlliance = subject.allianceWith(overlord);
+    if (directAlliance !== null) {
+      this.mg.removeAllianceSilently(directAlliance);
+    }
+
     subject._overlord = overlord;
     subject._subjectInfo =
       requestType === "protection"
@@ -1244,37 +1248,6 @@ export class PlayerImpl implements Player {
     subjectImpl._overlord = null;
     subjectImpl._subjectInfo = null;
     return true;
-  }
-
-  // Backward-compatible V1 puppet helpers.
-  outgoingPuppetRequests(): Player[] {
-    return this._outgoingSubjectRequests
-      .filter((request) => request.requestType() === "subjugation")
-      .map((request) => request.recipient());
-  }
-
-  isRequestingPuppetOf(other: Player): boolean {
-    return this.isRequestingSubjectRelation(other, "subjugation");
-  }
-
-  canSendPuppetRequest(other: Player): boolean {
-    return this.canDemandSubjugation(other);
-  }
-
-  requestPuppet(other: Player): boolean {
-    return this.demandSubjugation(other);
-  }
-
-  acceptPuppetRequest(requestor: Player): boolean {
-    return this.acceptSubjectRequest(requestor, "subjugation");
-  }
-
-  rejectPuppetRequest(requestor: Player): boolean {
-    return this.rejectSubjectRequest(requestor, "subjugation");
-  }
-
-  releasePuppet(subject: Player): boolean {
-    return this.releaseSubject(subject);
   }
 
   declareIndependence(): boolean {
