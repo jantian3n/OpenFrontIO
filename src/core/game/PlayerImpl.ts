@@ -111,6 +111,9 @@ class ProtectionCallRecord implements ProtectionCall {
 const SUBJECT_TRIBUTE_INTERVAL_TICKS = 300;
 const SUBJECT_AUTONOMY_INTERVAL_TICKS = 600;
 const SUBJECT_INDEPENDENCE_AUTONOMY = 80;
+// A state that starts a conflict cannot immediately turn the opponent's
+// retaliation into a protection claim. Active attacks extend this implicitly.
+const PROTECTION_AGGRESSION_MEMORY_TICKS = 600;
 
 // Shared singletons for empty collections in toFullUpdate. Sharing
 // references lets diffPlayerUpdate's `a === b` fast paths skip structural
@@ -205,6 +208,7 @@ export class PlayerImpl implements Player {
   private _lastSubjectRequestTick = new Map<PlayerID, Tick>();
   private _pendingProtectionCalls: ProtectionCallRecord[] = [];
   private _lastProtectionCallTick = new Map<string, Tick>();
+  private _lastAggressionTick = new Map<PlayerID, Tick>();
   private _subjectLastGoldEarned: Gold = 0n;
   private _lastSubjectEconomyTick: Tick = -1;
   private _lastSubjectAutonomyTick: Tick = -1;
@@ -1351,6 +1355,18 @@ export class PlayerImpl implements Player {
       attacker === this ||
       attacker === this._overlord
     ) {
+      return false;
+    }
+
+    // Protection is defensive. A subject that initiated this conflict cannot
+    // invoke its overlord merely because the victim fights back.
+    const stillAttacking = this.outgoingAttacks().some(
+      (attack) =>
+        attack.isActive() &&
+        attack.target().isPlayer() &&
+        attack.target() === attacker,
+    );
+    if (stillAttacking || this.hasRecentAggressionAgainst(attacker)) {
       return false;
     }
 
@@ -2506,6 +2522,19 @@ export class PlayerImpl implements Player {
       return this.mg.isNationSpawnImmunityActive();
     }
     return false;
+  }
+
+  recordAggressionAgainst(player: Player): void {
+    if (player === this) return;
+    this._lastAggressionTick.set(player.id(), this.mg.ticks());
+  }
+
+  hasRecentAggressionAgainst(player: Player): boolean {
+    const tick = this._lastAggressionTick.get(player.id());
+    return (
+      tick !== undefined &&
+      this.mg.ticks() - tick < PROTECTION_AGGRESSION_MEMORY_TICKS
+    );
   }
 
   public canAttackPlayer(
