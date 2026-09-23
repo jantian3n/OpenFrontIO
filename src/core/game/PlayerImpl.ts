@@ -1699,15 +1699,12 @@ export class PlayerImpl implements Player {
   declareIndependence(): boolean {
     if (!this.canDeclareIndependence() || this._overlord === null) return false;
     const overlord = this._overlord as PlayerImpl;
-    overlord.cancelProtectionCallsForSubject(this);
-    overlord._subjects = overlord._subjects.filter((p) => p !== this);
-    this._overlord = null;
-    this._subjectInfo = null;
-    this._lastSubjectEconomyTick = -1;
-    this._lastSubjectAutonomyTick = -1;
-    this._lastProtectionOutcomeTick = -1;
-    this.updateRelation(overlord, -100);
-    overlord.updateRelation(this, -100);
+
+    // At 100 autonomy independence is peaceful: no automatic hostility.
+    const released = overlord.releaseSubject(this);
+    if (!released) return false;
+
+    this.clearSubjectRequestsInvolving(this, overlord);
     return true;
   }
 
