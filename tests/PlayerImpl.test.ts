@@ -3,6 +3,7 @@ import {
   Player,
   PlayerInfo,
   PlayerType,
+  Relation,
   SubjectRelationKind,
   UnitType,
 } from "../src/core/game/Game";
@@ -326,6 +327,29 @@ describe("PlayerImpl", () => {
       expect(player.relation(attacker)).toBe(Relation.Hostile);
       expect(player.targets()).toContain(attacker);
       expect(other.subjectInfo()?.autonomy).toBe(58);
+    });
+
+    test("ignoring a protection call until expiry counts as declining it", () => {
+      makePlayerDominant();
+      expect(other.requestProtection(player)).toBe(true);
+      expect(player.acceptSubjectRequest(other, "protection")).toBe(true);
+
+      const attackerInfo = new PlayerInfo(
+        "attacker",
+        PlayerType.Human,
+        null,
+        "attacker_id",
+      );
+      game.addPlayer(attackerInfo);
+      const attacker = game.player("attacker_id");
+      attacker.conquer(game.ref(40, 40));
+
+      expect(other.raiseProtectionCall(attacker)).toBe(true);
+      (game as any)._ticks += game.config().allianceRequestDuration();
+      player.processSubjectRelationTick();
+
+      expect(player.incomingProtectionCalls()).toHaveLength(0);
+      expect(other.subjectInfo()?.autonomy).toBe(70);
     });
 
     test("reciprocal subject requests are blocked while one is pending", () => {
