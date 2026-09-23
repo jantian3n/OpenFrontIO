@@ -57,7 +57,11 @@ describe("Player update diffing (toUpdate)", () => {
     expect(full!.allies).toEqual([]);
     expect(full!.overlord).toBeNull();
     expect(full!.subjects).toEqual([]);
-    expect(full!.outgoingPuppetRequests).toEqual([]);
+    expect(full!.subjectKind).toBeNull();
+    expect(full!.subjectOrigin).toBeNull();
+    expect(full!.autonomy).toBeNull();
+    expect(full!.tributeRate).toBeNull();
+    expect(full!.outgoingSubjectRequests).toEqual([]);
     expect(full!.targets).toEqual([]);
     expect(full!.embargoes).toEqual(new Set());
     expect(full!.outgoingAttacks).toEqual([]);
@@ -239,25 +243,40 @@ describe("Player update diffing (toUpdate)", () => {
     expect(bobDiff!.allies).toEqual([alice.smallID()]);
   });
 
-  test("puppet relationships appear in player diffs", () => {
+  test("subject relationships appear in player diffs", () => {
     alice.toUpdate();
     bob.toUpdate();
 
-    expect(alice.requestPuppet(bob)).toBe(true);
-    let aliceDiff = alice.toUpdate();
-    expect(aliceDiff).not.toBeNull();
-    expect(aliceDiff!.outgoingPuppetRequests).toEqual(["bob_id"]);
+    alice.addTroops(Math.max(100_000, bob.troops() * 5));
+    for (let x = 30; x < 50; x++) {
+      alice.conquer(game.ref(x, 30));
+    }
 
-    expect(bob.acceptPuppetRequest(alice)).toBe(true);
+    expect(bob.requestProtection(alice)).toBe(true);
+    let bobDiff = bob.toUpdate();
+    expect(bobDiff).not.toBeNull();
+    expect(bobDiff!.outgoingSubjectRequests).toEqual([
+      {
+        recipientID: "alice_id",
+        requestType: "protection",
+        createdAt: game.ticks(),
+      },
+    ]);
 
-    aliceDiff = alice.toUpdate();
+    expect(alice.acceptSubjectRequest(bob, "protection")).toBe(true);
+
+    const aliceDiff = alice.toUpdate();
     expect(aliceDiff).not.toBeNull();
     expect(aliceDiff!.subjects).toEqual([bob.smallID()]);
-    expect(aliceDiff!.outgoingPuppetRequests).toEqual([]);
 
-    const bobDiff = bob.toUpdate();
+    bobDiff = bob.toUpdate();
     expect(bobDiff).not.toBeNull();
     expect(bobDiff!.overlord).toBe(alice.smallID());
+    expect(bobDiff!.subjectKind).toBe("protectorate");
+    expect(bobDiff!.subjectOrigin).toBe("protection");
+    expect(bobDiff!.autonomy).toBe(60);
+    expect(bobDiff!.tributeRate).toBe(10);
+    expect(bobDiff!.outgoingSubjectRequests).toEqual([]);
   });
 
   test("targeting a player appears in the diff", () => {
