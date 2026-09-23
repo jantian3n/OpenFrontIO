@@ -110,7 +110,8 @@ class ProtectionCallRecord implements ProtectionCall {
 
 const SUBJECT_TRIBUTE_INTERVAL_TICKS = 300;
 const SUBJECT_AUTONOMY_INTERVAL_TICKS = 600;
-const SUBJECT_INDEPENDENCE_AUTONOMY = 80;
+const SUBJECT_INDEPENDENCE_REQUEST_AUTONOMY = 80;
+const SUBJECT_PEACEFUL_INDEPENDENCE_AUTONOMY = 100;
 const SUBJECT_PROTECTION_OUTCOME_COOLDOWN_TICKS = 300;
 // A state that starts a conflict cannot immediately turn the opponent's
 // retaliation into a protection claim. Active attacks extend this implicitly.
@@ -1140,6 +1141,17 @@ export class PlayerImpl implements Player {
     return !this.hasPendingSubjectRequestWith(other);
   }
 
+  canRequestIndependence(other: Player): boolean {
+    return (
+      this.isSubjectOf(other) &&
+      this._subjectInfo !== null &&
+      this._subjectInfo.autonomy >= SUBJECT_INDEPENDENCE_REQUEST_AUTONOMY &&
+      this._subjectInfo.autonomy < SUBJECT_PEACEFUL_INDEPENDENCE_AUTONOMY &&
+      this.subjectRequestCooldownPassed(other) &&
+      !this.hasPendingSubjectRequestWith(other)
+    );
+  }
+
   private createSubjectRequest(
     other: Player,
     requestType: SubjectRequestType,
@@ -1147,7 +1159,9 @@ export class PlayerImpl implements Player {
     const allowed =
       requestType === "protection"
         ? this.canRequestProtection(other)
-        : this.canDemandSubjugation(other);
+        : requestType === "subjugation"
+          ? this.canDemandSubjugation(other)
+          : this.canRequestIndependence(other);
     if (!allowed) return false;
 
     const request = new SubjectRequestImpl(
@@ -1168,6 +1182,10 @@ export class PlayerImpl implements Player {
 
   demandSubjugation(other: Player): boolean {
     return this.createSubjectRequest(other, "subjugation");
+  }
+
+  requestIndependence(other: Player): boolean {
+    return this.createSubjectRequest(other, "independence");
   }
 
   private findOutgoingSubjectRequest(
@@ -1231,6 +1249,26 @@ export class PlayerImpl implements Player {
       requestType,
     );
     if (request === undefined) return false;
+
+    if (requestType === "independence") {
+      const subject = requestor as PlayerImpl;
+      if (
+        !subject.isSubjectOf(this) ||
+        subject._subjectInfo === null ||
+        subject._subjectInfo.autonomy < SUBJECT_INDEPENDENCE_REQUEST_AUTONOMY
+      ) {
+        return false;
+      }
+
+      this.releaseSubject(subject);
+      this.clearSubjectRequestsInvolving(subject, this);
+      this.mg.addUpdate({
+        type: GameUpdateType.SubjectRequestReply,
+        request: request.toUpdate(),
+        accepted: true,
+      });
+      return true;
+    }
 
     const subject = (
       requestType === "protection" ? requestor : this
@@ -1592,7 +1630,7 @@ export class PlayerImpl implements Player {
     return (
       this._overlord !== null &&
       this._subjectInfo !== null &&
-      this._subjectInfo.autonomy >= SUBJECT_INDEPENDENCE_AUTONOMY
+      this._subjectInfo.autonomy >= SUBJECT_PEACEFUL_INDEPENDENCE_AUTONOMY
     );
   }
 
