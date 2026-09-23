@@ -628,11 +628,11 @@ export class PlayerView {
   }
 
   subjectKind(): SubjectRelationKind | null {
-    return this.state.subjectKind as SubjectRelationKind | null;
+    return (this.state.subjectKind ?? null) as SubjectRelationKind | null;
   }
 
   subjectOrigin(): SubjectRequestType | null {
-    return this.state.subjectOrigin as SubjectRequestType | null;
+    return (this.state.subjectOrigin ?? null) as SubjectRequestType | null;
   }
 
   autonomy(): number | null {
@@ -682,10 +682,14 @@ export class PlayerView {
   }
 
   isFriendly(other: PlayerView): boolean {
+    const myOverlord = this.overlord();
+    const sharedOverlord =
+      myOverlord !== null && myOverlord === other.overlord();
     return (
       this.isAlliedWith(other) ||
       this.isOnSameTeam(other) ||
-      this.isInSubjectRelation(other)
+      this.isInSubjectRelation(other) ||
+      sharedOverlord
     );
   }
 
