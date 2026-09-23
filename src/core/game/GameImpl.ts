@@ -892,6 +892,13 @@ export class GameImpl implements Game {
     });
   }
 
+  public removeAllianceSilently(alliance: Alliance): void {
+    const duration = this._ticks - alliance.createdAt();
+    this.stats().allianceEnded(alliance.requestor(), duration, null);
+    this.stats().allianceEnded(alliance.recipient(), duration, null);
+    this.detachAlliance(alliance);
+  }
+
   public removeAlliancesByPlayerSilently(player: Player): void {
     // Snapshot — detachAlliance reassigns the player's _alliances as it goes.
     const removed = [...(player as PlayerImpl)._alliances];
