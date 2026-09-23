@@ -33,6 +33,7 @@ import {
   PlayerInfo,
   PlayerProfile,
   PlayerType,
+  ProtectionCall,
   Relation,
   Structures,
   SubjectRelationInfo,
@@ -86,6 +87,30 @@ class Donation {
     public readonly tick: Tick,
   ) {}
 }
+
+class ProtectionCallRecord implements ProtectionCall {
+  constructor(
+    private readonly subject_: Player,
+    private readonly attacker_: Player,
+    private readonly createdAt_: Tick,
+  ) {}
+
+  subject(): Player {
+    return this.subject_;
+  }
+
+  attacker(): Player {
+    return this.attacker_;
+  }
+
+  createdAt(): Tick {
+    return this.createdAt_;
+  }
+}
+
+const SUBJECT_TRIBUTE_INTERVAL_TICKS = 300;
+const SUBJECT_AUTONOMY_INTERVAL_TICKS = 600;
+const SUBJECT_INDEPENDENCE_AUTONOMY = 80;
 
 // Shared singletons for empty collections in toFullUpdate. Sharing
 // references lets diffPlayerUpdate's `a === b` fast paths skip structural
@@ -178,6 +203,11 @@ export class PlayerImpl implements Player {
   private _subjectInfo: SubjectRelationInfo | null = null;
   private _outgoingSubjectRequests: SubjectRequestImpl[] = [];
   private _lastSubjectRequestTick = new Map<PlayerID, Tick>();
+  private _pendingProtectionCalls: ProtectionCallRecord[] = [];
+  private _lastProtectionCallTick = new Map<string, Tick>();
+  private _subjectLastGoldEarned: Gold = 0n;
+  private _lastSubjectEconomyTick: Tick = -1;
+  private _lastSubjectAutonomyTick: Tick = -1;
 
   private lastDeleteUnitTick: Tick = -1;
   private lastEmbargoAllTick: Tick = -1;
