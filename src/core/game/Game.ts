@@ -1124,11 +1124,11 @@ export enum MessageType {
   ALLIANCE_BROKEN,
   ALLIANCE_EXPIRED,
   SUBJECT_REQUEST,
-  PROTECTION_CALL,
   DONATION_SENT,
   DONATION_RECEIVED,
   CHAT,
   RENEW_ALLIANCE,
+  PROTECTION_CALL,
 }
 
 // Message categories used for filtering events in the EventsDisplay
