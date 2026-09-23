@@ -892,6 +892,16 @@ export class GameImpl implements Game {
     });
   }
 
+  public rejectAllianceRequestsInvolving(player: Player): void {
+    const pending = this.allianceRequests.filter(
+      (request) =>
+        request.requestor() === player || request.recipient() === player,
+    );
+    for (const request of pending) {
+      this.rejectAllianceRequest(request);
+    }
+  }
+
   public removeAllianceSilently(alliance: Alliance): void {
     const duration = this._ticks - alliance.createdAt();
     this.stats().allianceEnded(alliance.requestor(), duration, null);
