@@ -163,9 +163,9 @@ describe("PlayerImpl", () => {
       makePlayerDominant();
 
       expect(player.demandSubjugation(other)).toBe(true);
-      expect(
-        player.isRequestingSubjectRelation(other, "subjugation"),
-      ).toBe(true);
+      expect(player.isRequestingSubjectRelation(other, "subjugation")).toBe(
+        true,
+      );
 
       expect(other.acceptSubjectRequest(player, "subjugation")).toBe(true);
       expect(other.isPuppetOf(player)).toBe(true);
@@ -290,9 +290,9 @@ describe("PlayerImpl", () => {
       makePlayerDominant();
 
       expect(other.requestProtection(player)).toBe(true);
-      expect(
-        other.isRequestingSubjectRelation(player, "protection"),
-      ).toBe(true);
+      expect(other.isRequestingSubjectRelation(player, "protection")).toBe(
+        true,
+      );
 
       expect(player.acceptSubjectRequest(other, "protection")).toBe(true);
       expect(other.isProtectorate()).toBe(true);
@@ -464,8 +464,12 @@ describe("PlayerImpl", () => {
 
       expect(other.raiseProtectionCall(attackerA)).toBe(true);
       expect(other.raiseProtectionCall(attackerB)).toBe(true);
-      expect(player.respondToProtectionCall(other, attackerA, false)).toBe(true);
-      expect(player.respondToProtectionCall(other, attackerB, false)).toBe(true);
+      expect(player.respondToProtectionCall(other, attackerA, false)).toBe(
+        true,
+      );
+      expect(player.respondToProtectionCall(other, attackerB, false)).toBe(
+        true,
+      );
 
       expect(other.subjectInfo()?.autonomy).toBe(70);
     });
