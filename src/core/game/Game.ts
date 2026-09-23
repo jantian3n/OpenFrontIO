@@ -773,9 +773,9 @@ export interface Player {
     requestType: SubjectRequestType,
   ): boolean;
   releaseSubject(subject: Player): boolean;
-
+  canDeclareIndependence(): boolean;
   declareIndependence(): boolean;
-
+  processSubjectRelationTick(): void;
 
   // Targeting
   canTarget(other: Player): boolean;
