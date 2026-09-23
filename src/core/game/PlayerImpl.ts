@@ -1300,8 +1300,35 @@ export class PlayerImpl implements Player {
     return true;
   }
 
+  private cancelProtectionCallsForSubject(subject: Player): void {
+    const remaining: ProtectionCallRecord[] = [];
+
+    for (const call of this._pendingProtectionCalls) {
+      if (call.subject() !== subject) {
+        remaining.push(call);
+        continue;
+      }
+
+      this.mg.addUpdate({
+        type: GameUpdateType.ProtectionCallReply,
+        call: {
+          type: GameUpdateType.ProtectionCall,
+          overlordID: this.smallID(),
+          subjectID: subject.smallID(),
+          attackerID: call.attacker().smallID(),
+          createdAt: call.createdAt(),
+        },
+        intervened: false,
+        cancelled: true,
+      });
+    }
+
+    this._pendingProtectionCalls = remaining;
+  }
+
   releaseSubject(subject: Player): boolean {
     if (!this.isOverlordOf(subject)) return false;
+    this.cancelProtectionCallsForSubject(subject);
     this._subjects = this._subjects.filter((p) => p !== subject);
     const subjectImpl = subject as PlayerImpl;
     subjectImpl._overlord = null;
@@ -1309,9 +1336,6 @@ export class PlayerImpl implements Player {
     subjectImpl._lastSubjectEconomyTick = -1;
     subjectImpl._lastSubjectAutonomyTick = -1;
     subjectImpl._lastProtectionOutcomeTick = -1;
-    this._pendingProtectionCalls = this._pendingProtectionCalls.filter(
-      (call) => call.subject() !== subject,
-    );
     return true;
   }
 
@@ -1600,10 +1624,8 @@ export class PlayerImpl implements Player {
   declareIndependence(): boolean {
     if (!this.canDeclareIndependence() || this._overlord === null) return false;
     const overlord = this._overlord as PlayerImpl;
+    overlord.cancelProtectionCallsForSubject(this);
     overlord._subjects = overlord._subjects.filter((p) => p !== this);
-    overlord._pendingProtectionCalls = overlord._pendingProtectionCalls.filter(
-      (call) => call.subject() !== this,
-    );
     this._overlord = null;
     this._subjectInfo = null;
     this._lastSubjectEconomyTick = -1;
