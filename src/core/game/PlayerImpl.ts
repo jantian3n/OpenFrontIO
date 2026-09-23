@@ -35,6 +35,10 @@ import {
   PlayerType,
   Relation,
   Structures,
+  SubjectRelationInfo,
+  SubjectRelationKind,
+  SubjectRequest,
+  SubjectRequestType,
   Team,
   TerraNullius,
   Tick,
@@ -56,6 +60,7 @@ import {
   GameUpdateType,
   PlayerUpdate,
 } from "./GameUpdates";
+import { SubjectRequestImpl } from "./SubjectRequestImpl";
 import { ReadonlyTileSet, TileSet } from "./TileSet";
 import {
   bumpTraversalGeneration,
@@ -170,7 +175,8 @@ export class PlayerImpl implements Player {
 
   private _overlord: Player | null = null;
   private _subjects: Player[] = [];
-  private _outgoingPuppetRequests: Player[] = [];
+  private _subjectInfo: SubjectRelationInfo | null = null;
+  private _outgoingSubjectRequests: SubjectRequestImpl[] = [];
 
   private lastDeleteUnitTick: Tick = -1;
   private lastEmbargoAllTick: Tick = -1;
@@ -389,10 +395,16 @@ export class PlayerImpl implements Player {
         this._subjects.length === 0
           ? EMPTY_NUMBER_ARRAY
           : this._subjects.map((p) => p.smallID()),
-      outgoingPuppetRequests:
-        this._outgoingPuppetRequests.length === 0
-          ? EMPTY_STRING_ARRAY
-          : this._outgoingPuppetRequests.map((p) => p.id()),
+      subjectKind: this._subjectInfo?.kind ?? null,
+      subjectOrigin: this._subjectInfo?.origin ?? null,
+      subjectCreatedAt: this._subjectInfo?.createdAt ?? null,
+      autonomy: this._subjectInfo?.autonomy ?? null,
+      tributeRate: this._subjectInfo?.tributeRate ?? null,
+      outgoingSubjectRequests: this._outgoingSubjectRequests.map((request) => ({
+        recipientID: request.recipient().id(),
+        requestType: request.requestType(),
+        createdAt: request.createdAt(),
+      })),
       embargoes: embargoes,
       isTraitor: this.isTraitor(),
       traitorRemainingTicks: this.getTraitorRemainingTicks(),
@@ -931,91 +943,315 @@ export class PlayerImpl implements Player {
     return [...this._subjects];
   }
 
-  isPuppet(): boolean {
+  subjectInfo(): SubjectRelationInfo | null {
+    return this._subjectInfo === null ? null : { ...this._subjectInfo };
+  }
+
+  isSubject(): boolean {
     return this._overlord !== null;
   }
 
-  isPuppetOf(other: Player): boolean {
+  isProtectorate(): boolean {
+    return (
+      this._overlord !== null &&
+      this._subjectInfo?.kind === SubjectRelationKind.Protectorate
+    );
+  }
+
+  isPuppet(): boolean {
+    return (
+      this._overlord !== null &&
+      this._subjectInfo?.kind === SubjectRelationKind.Puppet
+    );
+  }
+
+  isSubjectOf(other: Player): boolean {
     return this._overlord === other;
+  }
+
+  isPuppetOf(other: Player): boolean {
+    return this.isPuppet() && this._overlord === other;
   }
 
   isOverlordOf(other: Player): boolean {
     return this._subjects.includes(other);
   }
 
+  isInSubjectRelation(other: Player): boolean {
+    return this.isSubjectOf(other) || this.isOverlordOf(other);
+  }
+
   isInPuppetRelation(other: Player): boolean {
-    return this.isPuppetOf(other) || this.isOverlordOf(other);
+    return (
+      this.isPuppetOf(other) ||
+      (this.isOverlordOf(other) && other.isPuppetOf(this))
+    );
   }
 
-  outgoingPuppetRequests(): Player[] {
-    return [...this._outgoingPuppetRequests];
+  outgoingSubjectRequests(): SubjectRequest[] {
+    return [...this._outgoingSubjectRequests];
   }
 
-  isRequestingPuppetOf(other: Player): boolean {
-    return this._outgoingPuppetRequests.includes(other);
+  incomingSubjectRequests(): SubjectRequest[] {
+    return this.mg
+      .players()
+      .flatMap((player) => player.outgoingSubjectRequests())
+      .filter((request) => request.recipient() === this);
   }
 
-  canSendPuppetRequest(other: Player): boolean {
-    if (other === this || !this.isAlive() || !other.isAlive()) return false;
-    if (this.isDisconnected() || other.isDisconnected()) return false;
-    if (this.isPuppet() || other.isPuppet()) return false;
-    // V1 keeps the hierarchy one level deep: an existing overlord cannot
-    // itself become somebody else's subject.
-    if (other.subjects().length > 0) return false;
-    if (this.isOverlordOf(other) || this.isAlliedWith(other)) return false;
-    if (other.isRequestingPuppetOf(this)) return false;
-    return !this._outgoingPuppetRequests.includes(other);
+  isRequestingSubjectRelation(
+    other: Player,
+    requestType?: SubjectRequestType,
+  ): boolean {
+    return this._outgoingSubjectRequests.some(
+      (request) =>
+        request.recipient() === other &&
+        (requestType === undefined || request.requestType() === requestType),
+    );
   }
 
-  requestPuppet(other: Player): boolean {
-    if (!this.canSendPuppetRequest(other)) return false;
-    this._outgoingPuppetRequests.push(other);
-    return true;
+  private hasPendingSubjectRequestWith(other: Player): boolean {
+    return (
+      this.isRequestingSubjectRelation(other) ||
+      other.isRequestingSubjectRelation(this)
+    );
   }
 
-  acceptPuppetRequest(requestor: Player): boolean {
+  private isActivelyFighting(other: Player): boolean {
+    const attacks = (attacker: Player, target: Player) =>
+      attacker
+        .outgoingAttacks()
+        .some(
+          (attack) =>
+            attack.isActive() &&
+            attack.target().isPlayer() &&
+            attack.target() === target,
+        );
+    return attacks(this, other) || attacks(other, this);
+  }
+
+  private isMeaningfullyWeakerThan(other: Player): boolean {
+    const substantiallyLower = (mine: number, theirs: number) =>
+      theirs > 0 && mine < theirs && mine * 100 <= theirs * 70;
+
+    let weakerIndicators = 0;
+    if (substantiallyLower(this.troops(), other.troops())) {
+      weakerIndicators++;
+    }
     if (
-      this._overlord !== null ||
-      this._subjects.length > 0 ||
-      !this.isAlive() ||
-      !requestor.isAlive()
+      substantiallyLower(
+        this.mg.config().maxTroops(this),
+        this.mg.config().maxTroops(other),
+      )
+    ) {
+      weakerIndicators++;
+    }
+    if (substantiallyLower(this.numTilesOwned(), other.numTilesOwned())) {
+      weakerIndicators++;
+    }
+    return weakerIndicators >= 2;
+  }
+
+  private canFormSubjectRelation(
+    subject: Player,
+    overlord: Player,
+    requirePeace: boolean,
+  ): boolean {
+    if (subject === overlord || !subject.isAlive() || !overlord.isAlive()) {
+      return false;
+    }
+    if (subject.isDisconnected() || overlord.isDisconnected()) return false;
+    if (subject.isSubject() || subject.subjects().length > 0) return false;
+    if (overlord.isSubject()) return false;
+    if (subject.isAlliedWith(overlord)) return false;
+    if (
+      requirePeace &&
+      (subject as PlayerImpl).isActivelyFighting(overlord)
     ) {
       return false;
     }
-    if (!requestor.isRequestingPuppetOf(this) || requestor.isPuppet()) {
+    return (subject as PlayerImpl).isMeaningfullyWeakerThan(overlord);
+  }
+
+  canRequestProtection(other: Player): boolean {
+    if (!this.canFormSubjectRelation(this, other, true)) return false;
+    return !this.hasPendingSubjectRequestWith(other);
+  }
+
+  canDemandSubjugation(other: Player): boolean {
+    if (!this.canFormSubjectRelation(other, this, false)) return false;
+    return !this.hasPendingSubjectRequestWith(other);
+  }
+
+  private createSubjectRequest(
+    other: Player,
+    requestType: SubjectRequestType,
+  ): boolean {
+    const allowed =
+      requestType === "protection"
+        ? this.canRequestProtection(other)
+        : this.canDemandSubjugation(other);
+    if (!allowed) return false;
+
+    const request = new SubjectRequestImpl(
+      this,
+      other,
+      requestType,
+      this.mg.ticks(),
+    );
+    this._outgoingSubjectRequests.push(request);
+    this.mg.addUpdate(request.toUpdate());
+    return true;
+  }
+
+  requestProtection(other: Player): boolean {
+    return this.createSubjectRequest(other, "protection");
+  }
+
+  demandSubjugation(other: Player): boolean {
+    return this.createSubjectRequest(other, "subjugation");
+  }
+
+  private findOutgoingSubjectRequest(
+    recipient: Player,
+    requestType: SubjectRequestType,
+  ): SubjectRequestImpl | undefined {
+    return this._outgoingSubjectRequests.find(
+      (request) =>
+        request.recipient() === recipient &&
+        request.requestType() === requestType,
+    );
+  }
+
+  private clearSubjectRequestsInvolving(...players: Player[]): void {
+    const affected = new Set(players);
+    for (const player of this.mg.players()) {
+      const impl = player as PlayerImpl;
+      impl._outgoingSubjectRequests = impl._outgoingSubjectRequests.filter(
+        (request) =>
+          !affected.has(request.requestor()) &&
+          !affected.has(request.recipient()),
+      );
+    }
+  }
+
+  acceptSubjectRequest(
+    requestor: Player,
+    requestType: SubjectRequestType,
+  ): boolean {
+    const request = (requestor as PlayerImpl).findOutgoingSubjectRequest(
+      this,
+      requestType,
+    );
+    if (request === undefined) return false;
+
+    const subject = (
+      requestType === "protection" ? requestor : this
+    ) as PlayerImpl;
+    const overlord = (
+      requestType === "protection" ? this : requestor
+    ) as PlayerImpl;
+
+    if (
+      !this.canFormSubjectRelation(
+        subject,
+        overlord,
+        requestType === "protection",
+      )
+    ) {
       return false;
     }
-    // Once subjugated neither side should keep stale demands open.
-    (requestor as PlayerImpl)._outgoingPuppetRequests = [];
-    this._outgoingPuppetRequests = [];
 
-    // A puppet relation is independent from the overlord's unrelated
-    // alliances. Direct alliances with this player are already forbidden by
-    // canSendPuppetRequest(), so there is nothing to tear down here.
-    this._overlord = requestor;
-    const subjects = (requestor as PlayerImpl)._subjects;
-    if (!subjects.includes(this)) {
-      subjects.push(this);
+    subject._overlord = overlord;
+    subject._subjectInfo =
+      requestType === "protection"
+        ? {
+            kind: SubjectRelationKind.Protectorate,
+            origin: "protection",
+            createdAt: this.mg.ticks(),
+            autonomy: 60,
+            tributeRate: 10,
+          }
+        : {
+            kind: SubjectRelationKind.Puppet,
+            origin: "subjugation",
+            createdAt: this.mg.ticks(),
+            autonomy: 40,
+            tributeRate: 20,
+          };
+
+    if (!overlord._subjects.includes(subject)) {
+      overlord._subjects.push(subject);
     }
 
-    // Existing attacks are stopped by AttackExecution once isFriendly() sees
-    // the new relation on the next tick.
+    this.clearSubjectRequestsInvolving(subject, overlord);
+    this.mg.addUpdate({
+      type: GameUpdateType.SubjectRequestReply,
+      request: request.toUpdate(),
+      accepted: true,
+    });
     return true;
+  }
+
+  rejectSubjectRequest(
+    requestor: Player,
+    requestType: SubjectRequestType,
+  ): boolean {
+    const requestorImpl = requestor as PlayerImpl;
+    const request = requestorImpl.findOutgoingSubjectRequest(
+      this,
+      requestType,
+    );
+    if (request === undefined) return false;
+
+    requestorImpl._outgoingSubjectRequests =
+      requestorImpl._outgoingSubjectRequests.filter((r) => r !== request);
+    this.mg.addUpdate({
+      type: GameUpdateType.SubjectRequestReply,
+      request: request.toUpdate(),
+      accepted: false,
+    });
+    return true;
+  }
+
+  releaseSubject(subject: Player): boolean {
+    if (!this.isOverlordOf(subject)) return false;
+    this._subjects = this._subjects.filter((p) => p !== subject);
+    const subjectImpl = subject as PlayerImpl;
+    subjectImpl._overlord = null;
+    subjectImpl._subjectInfo = null;
+    return true;
+  }
+
+  // Backward-compatible V1 puppet helpers.
+  outgoingPuppetRequests(): Player[] {
+    return this._outgoingSubjectRequests
+      .filter((request) => request.requestType() === "subjugation")
+      .map((request) => request.recipient());
+  }
+
+  isRequestingPuppetOf(other: Player): boolean {
+    return this.isRequestingSubjectRelation(other, "subjugation");
+  }
+
+  canSendPuppetRequest(other: Player): boolean {
+    return this.canDemandSubjugation(other);
+  }
+
+  requestPuppet(other: Player): boolean {
+    return this.demandSubjugation(other);
+  }
+
+  acceptPuppetRequest(requestor: Player): boolean {
+    return this.acceptSubjectRequest(requestor, "subjugation");
   }
 
   rejectPuppetRequest(requestor: Player): boolean {
-    if (!requestor.isRequestingPuppetOf(this)) return false;
-    (requestor as PlayerImpl)._outgoingPuppetRequests = (
-      requestor as PlayerImpl
-    )._outgoingPuppetRequests.filter((p) => p !== this);
-    return true;
+    return this.rejectSubjectRequest(requestor, "subjugation");
   }
 
   releasePuppet(subject: Player): boolean {
-    if (!this.isOverlordOf(subject)) return false;
-    this._subjects = this._subjects.filter((p) => p !== subject);
-    (subject as PlayerImpl)._overlord = null;
-    return true;
+    return this.releaseSubject(subject);
   }
 
   declareIndependence(): boolean {
@@ -1023,6 +1259,7 @@ export class PlayerImpl implements Player {
     const overlord = this._overlord as PlayerImpl;
     overlord._subjects = overlord._subjects.filter((p) => p !== this);
     this._overlord = null;
+    this._subjectInfo = null;
     this.updateRelation(overlord, -100);
     overlord.updateRelation(this, -100);
     return true;
@@ -1320,7 +1557,7 @@ export class PlayerImpl implements Player {
   }
 
   canTrade(other: Player): boolean {
-    if (this.isInPuppetRelation(other)) return true;
+    if (this.isInSubjectRelation(other)) return true;
     const embargo =
       other.hasEmbargoAgainst(this) || this.hasEmbargoAgainst(other);
     return !embargo && other.id() !== this.id();
@@ -1398,7 +1635,7 @@ export class PlayerImpl implements Player {
     return (
       this.isOnSameTeam(other) ||
       this.isAlliedWith(other) ||
-      this.isInPuppetRelation(other)
+      this.isInSubjectRelation(other)
     );
   }
 
