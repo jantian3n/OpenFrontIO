@@ -197,6 +197,19 @@ describe("PlayerImpl", () => {
       expect(player.isTraitor()).toBe(false);
     });
 
+    test("becoming a puppet clears pending alliance requests", () => {
+      makePlayerDominant();
+      const pending = other.createAllianceRequest(player);
+      expect(pending).not.toBeNull();
+      expect(other.outgoingAllianceRequests()).toHaveLength(1);
+
+      expect(player.demandSubjugation(other)).toBe(true);
+      expect(other.acceptSubjectRequest(player, "subjugation")).toBe(true);
+
+      expect(other.outgoingAllianceRequests()).toHaveLength(0);
+      expect(other.isPuppet()).toBe(true);
+    });
+
     test("weak player can seek protection from a stronger player", () => {
       makePlayerDominant();
 
