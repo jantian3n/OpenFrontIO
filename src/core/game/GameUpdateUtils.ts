@@ -61,8 +61,14 @@ export function diffPlayerUpdate(
     prev.betrayals === next.betrayals &&
     prev.lastDeleteUnitTick === next.lastDeleteUnitTick &&
     prev.isLobbyCreator === next.isLobbyCreator &&
+    prev.overlord === next.overlord &&
     numberArrayEqual(prev.allies, next.allies) &&
+    numberArrayEqual(prev.subjects, next.subjects) &&
     numberArrayEqual(prev.targets, next.targets) &&
+    stringArrayEqual(
+      prev.outgoingPuppetRequests,
+      next.outgoingPuppetRequests,
+    ) &&
     stringArrayEqual(
       prev.outgoingAllianceRequests,
       next.outgoingAllianceRequests,
@@ -128,8 +134,17 @@ export function diffPlayerUpdate(
     prev.lastDeleteUnitTick === next.lastDeleteUnitTick,
   );
   setIfDifferent("isLobbyCreator", prev.isLobbyCreator === next.isLobbyCreator);
+  setIfDifferent("overlord", prev.overlord === next.overlord);
   setIfDifferent("allies", numberArrayEqual(prev.allies, next.allies));
+  setIfDifferent("subjects", numberArrayEqual(prev.subjects, next.subjects));
   setIfDifferent("targets", numberArrayEqual(prev.targets, next.targets));
+  setIfDifferent(
+    "outgoingPuppetRequests",
+    stringArrayEqual(
+      prev.outgoingPuppetRequests,
+      next.outgoingPuppetRequests,
+    ),
+  );
   setIfDifferent(
     "outgoingAllianceRequests",
     stringArrayEqual(
@@ -202,6 +217,11 @@ export function applyStateUpdate(target: PlayerState, pu: PlayerUpdate): void {
   // Slice() to detach from the wire object — accumulated state mustn't share
   // mutable arrays with per-tick update payloads.
   if (pu.allies !== undefined) target.allies = pu.allies.slice();
+  if (pu.overlord !== undefined) target.overlord = pu.overlord;
+  if (pu.subjects !== undefined) target.subjects = pu.subjects.slice();
+  if (pu.outgoingPuppetRequests !== undefined) {
+    target.outgoingPuppetRequests = pu.outgoingPuppetRequests.slice();
+  }
   if (pu.targets !== undefined) target.targets = pu.targets.slice();
   if (pu.outgoingAllianceRequests !== undefined) {
     target.outgoingAllianceRequests = pu.outgoingAllianceRequests.slice();
