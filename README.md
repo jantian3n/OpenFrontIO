@@ -108,9 +108,12 @@ These are intentional gameplay rules and should not be weakened accidentally:
   - starts at **40 autonomy / 20% tribute**.
 
 - **Independence**
-  - requires **80 autonomy**;
+  - at **80 autonomy**, a subject may request independence from its overlord;
+  - the overlord may accept or reject that request;
+  - at **100 autonomy**, the subject may leave peacefully without needing approval;
   - ignored or refused protection obligations can increase subject autonomy;
-  - fulfilled protection obligations can reduce autonomy slightly.
+  - fulfilled protection obligations can reduce autonomy slightly;
+  - an independence-war mechanic is intentionally reserved for a later phase rather than being simulated through an unrelated attack shortcut.
 
 - **Protection obligations**
   - direct land attacks, naval invasions, direct nuclear attacks, and warship shelling can invoke a valid defensive protection call;
