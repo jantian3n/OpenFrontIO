@@ -661,8 +661,11 @@ export const SubjectIntentSchema = z.object({
     "reject",
     "release",
     "independence",
+    "intervene",
+    "decline_protection_call",
   ]),
   target: MappedID.optional(),
+  subject: MappedID.optional(),
   requestType: z.enum(["protection", "subjugation"]).optional(),
 });
 
