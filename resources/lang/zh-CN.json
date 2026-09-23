@@ -902,7 +902,7 @@
     "subject_status": "从属状态",
     "protectorate": "保护国",
     "puppet": "傀儡国",
-    "autonomy": "自主度",
+    "autonomy": "初始自主度",
     "tribute_rate": "贡金比例",
     "send_alliance": "请求结盟",
     "send_troops": "发送军队",
