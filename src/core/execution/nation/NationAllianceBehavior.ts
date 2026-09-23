@@ -46,6 +46,35 @@ export class NationAllianceBehavior {
     }
   }
 
+  handleProtectionCalls() {
+    for (const call of this.player.incomingProtectionCalls()) {
+      const subject = call.subject();
+      const attacker = call.attacker();
+
+      // Nation overlords are deliberately conservative: a protection pact
+      // creates a defense obligation, but it should not automatically turn
+      // every alliance dispute into a chain war.
+      const canPoliticallyIntervene =
+        !this.player.isOnSameTeam(attacker) &&
+        !this.player.isAlliedWith(attacker) &&
+        this.player.relation(attacker) < Relation.Friendly;
+
+      const strongEnough =
+        this.player.troops() >= attacker.troops() * 0.8 ||
+        this.game.config().maxTroops(this.player) >=
+          this.game.config().maxTroops(attacker) * 0.8 ||
+        this.player.numTilesOwned() >= attacker.numTilesOwned();
+
+      const intervene =
+        canPoliticallyIntervene &&
+        strongEnough &&
+        (subject.isProtectorate() ||
+          this.player.relation(subject) >= Relation.Neutral);
+
+      this.player.respondToProtectionCall(subject, attacker, intervene);
+    }
+  }
+
   handleSubjectRequests() {
     for (const request of this.player.incomingSubjectRequests()) {
       const requestor = request.requestor();
