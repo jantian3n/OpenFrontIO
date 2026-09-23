@@ -5,6 +5,7 @@ import {
   AttackUpdate,
   GameUpdateType,
   PlayerUpdate,
+  SubjectRequestView,
 } from "./GameUpdates";
 
 /**
@@ -62,12 +63,17 @@ export function diffPlayerUpdate(
     prev.lastDeleteUnitTick === next.lastDeleteUnitTick &&
     prev.isLobbyCreator === next.isLobbyCreator &&
     prev.overlord === next.overlord &&
+    prev.subjectKind === next.subjectKind &&
+    prev.subjectOrigin === next.subjectOrigin &&
+    prev.subjectCreatedAt === next.subjectCreatedAt &&
+    prev.autonomy === next.autonomy &&
+    prev.tributeRate === next.tributeRate &&
     numberArrayEqual(prev.allies, next.allies) &&
     numberArrayEqual(prev.subjects, next.subjects) &&
     numberArrayEqual(prev.targets, next.targets) &&
-    stringArrayEqual(
-      prev.outgoingPuppetRequests,
-      next.outgoingPuppetRequests,
+    subjectRequestArrayEqual(
+      prev.outgoingSubjectRequests,
+      next.outgoingSubjectRequests,
     ) &&
     stringArrayEqual(
       prev.outgoingAllianceRequests,
@@ -135,14 +141,22 @@ export function diffPlayerUpdate(
   );
   setIfDifferent("isLobbyCreator", prev.isLobbyCreator === next.isLobbyCreator);
   setIfDifferent("overlord", prev.overlord === next.overlord);
+  setIfDifferent("subjectKind", prev.subjectKind === next.subjectKind);
+  setIfDifferent("subjectOrigin", prev.subjectOrigin === next.subjectOrigin);
+  setIfDifferent(
+    "subjectCreatedAt",
+    prev.subjectCreatedAt === next.subjectCreatedAt,
+  );
+  setIfDifferent("autonomy", prev.autonomy === next.autonomy);
+  setIfDifferent("tributeRate", prev.tributeRate === next.tributeRate);
   setIfDifferent("allies", numberArrayEqual(prev.allies, next.allies));
   setIfDifferent("subjects", numberArrayEqual(prev.subjects, next.subjects));
   setIfDifferent("targets", numberArrayEqual(prev.targets, next.targets));
   setIfDifferent(
-    "outgoingPuppetRequests",
-    stringArrayEqual(
-      prev.outgoingPuppetRequests,
-      next.outgoingPuppetRequests,
+    "outgoingSubjectRequests",
+    subjectRequestArrayEqual(
+      prev.outgoingSubjectRequests,
+      next.outgoingSubjectRequests,
     ),
   );
   setIfDifferent(
@@ -219,8 +233,16 @@ export function applyStateUpdate(target: PlayerState, pu: PlayerUpdate): void {
   if (pu.allies !== undefined) target.allies = pu.allies.slice();
   if (pu.overlord !== undefined) target.overlord = pu.overlord;
   if (pu.subjects !== undefined) target.subjects = pu.subjects.slice();
-  if (pu.outgoingPuppetRequests !== undefined) {
-    target.outgoingPuppetRequests = pu.outgoingPuppetRequests.slice();
+  if (pu.subjectKind !== undefined) target.subjectKind = pu.subjectKind;
+  if (pu.subjectOrigin !== undefined) target.subjectOrigin = pu.subjectOrigin;
+  if (pu.subjectCreatedAt !== undefined)
+    target.subjectCreatedAt = pu.subjectCreatedAt;
+  if (pu.autonomy !== undefined) target.autonomy = pu.autonomy;
+  if (pu.tributeRate !== undefined) target.tributeRate = pu.tributeRate;
+  if (pu.outgoingSubjectRequests !== undefined) {
+    target.outgoingSubjectRequests = pu.outgoingSubjectRequests.map((request) => ({
+      ...request,
+    }));
   }
   if (pu.targets !== undefined) target.targets = pu.targets.slice();
   if (pu.outgoingAllianceRequests !== undefined) {
@@ -242,6 +264,24 @@ function numberArrayEqual(a?: number[], b?: number[]): boolean {
   if (!a || !b) return false;
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+function subjectRequestArrayEqual(
+  a?: SubjectRequestView[],
+  b?: SubjectRequestView[],
+): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (
+      a[i].recipientID !== b[i].recipientID ||
+      a[i].requestType !== b[i].requestType ||
+      a[i].createdAt !== b[i].createdAt
+    ) {
+      return false;
+    }
+  }
   return true;
 }
 
