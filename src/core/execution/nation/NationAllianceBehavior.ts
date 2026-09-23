@@ -75,6 +75,16 @@ export class NationAllianceBehavior {
     }
   }
 
+  maybePursueIndependence(): boolean {
+    if (this.player.canDeclareIndependence()) {
+      return this.player.declareIndependence();
+    }
+    if (this.player.canRequestIndependence()) {
+      return this.player.requestIndependence();
+    }
+    return false;
+  }
+
   handleIndependenceRequests() {
     for (const subject of this.player.subjects()) {
       if (!subject.hasPendingIndependenceRequest()) continue;
