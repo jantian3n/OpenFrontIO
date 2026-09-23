@@ -41,7 +41,7 @@ interface ActionableEvent {
   allianceID?: number;
   duration?: Tick;
   requestorID: number;
-  subjectRequestType?: "protection" | "subjugation";
+  subjectRequestType?: "protection" | "subjugation" | "independence";
   protectionSubjectID?: number;
 }
 
@@ -299,9 +299,13 @@ export class ActionableEvents extends LitElement implements Controller {
         ? translateText("events_display.request_protection", {
             name: requestor.displayName(),
           })
-        : translateText("events_display.demand_subjugation", {
-            name: requestor.displayName(),
-          });
+        : update.requestType === "subjugation"
+          ? translateText("events_display.demand_subjugation", {
+              name: requestor.displayName(),
+            })
+          : translateText("events_display.request_independence", {
+              name: requestor.displayName(),
+            });
 
     this.addEvent({
       description,
