@@ -97,6 +97,9 @@ function stateFromUpdate(pu: PlayerUpdate): PlayerState {
     spawnTile: pu.spawnTile,
     lastDeleteUnitTick: pu.lastDeleteUnitTick!,
     allies: pu.allies!.slice(),
+    overlord: pu.overlord ?? null,
+    subjects: pu.subjects?.slice() ?? [],
+    outgoingPuppetRequests: pu.outgoingPuppetRequests?.slice() ?? [],
     embargoes: [],
     targets: pu.targets!.slice(),
     outgoingAttacks: pu.outgoingAttacks!,
@@ -585,8 +588,44 @@ export class PlayerView {
     return this.static.team !== null && this.static.team === other.static.team;
   }
 
+  isPuppet(): boolean {
+    return this.state.overlord !== null;
+  }
+
+  overlord(): PlayerView | null {
+    return this.state.overlord === null
+      ? null
+      : (this.game.playerBySmallID(this.state.overlord) as PlayerView);
+  }
+
+  subjects(): PlayerView[] {
+    return this.state.subjects.map(
+      (id) => this.game.playerBySmallID(id) as PlayerView,
+    );
+  }
+
+  isPuppetOf(other: PlayerView): boolean {
+    return this.state.overlord === other.smallID();
+  }
+
+  isOverlordOf(other: PlayerView): boolean {
+    return this.state.subjects.includes(other.smallID());
+  }
+
+  isInPuppetRelation(other: PlayerView): boolean {
+    return this.isPuppetOf(other) || this.isOverlordOf(other);
+  }
+
+  isRequestingPuppetOf(other: PlayerView): boolean {
+    return this.state.outgoingPuppetRequests.includes(other.id());
+  }
+
   isFriendly(other: PlayerView): boolean {
-    return this.isAlliedWith(other) || this.isOnSameTeam(other);
+    return (
+      this.isAlliedWith(other) ||
+      this.isOnSameTeam(other) ||
+      this.isInPuppetRelation(other)
+    );
   }
 
   isRequestingAllianceWith(other: PlayerView) {
