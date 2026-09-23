@@ -372,6 +372,10 @@ export class GameImpl implements Game {
     requestor: Player,
     recipient: Player,
   ): AllianceRequest | null {
+    if (!requestor.canSendAllianceRequest(recipient)) {
+      console.log("cannot request alliance under current diplomacy rules");
+      return null;
+    }
     if (requestor.isAlliedWith(recipient)) {
       console.log("cannot request alliance, already allied");
       return null;
@@ -405,6 +409,11 @@ export class GameImpl implements Game {
 
     const requestor = request.requestor();
     const recipient = request.recipient();
+
+    if (requestor.isPuppet() || recipient.isPuppet()) {
+      this.rejectAllianceRequest(request);
+      return;
+    }
 
     const existing = requestor.allianceWith(recipient);
     if (existing) {
