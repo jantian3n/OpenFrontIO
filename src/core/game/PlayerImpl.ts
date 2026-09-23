@@ -168,6 +168,10 @@ export class PlayerImpl implements Player {
 
   private relations = new Map<Player, number>();
 
+  private _overlord: Player | null = null;
+  private _subjects: Player[] = [];
+  private _outgoingPuppetRequests: Player[] = [];
+
   private lastDeleteUnitTick: Tick = -1;
   private lastEmbargoAllTick: Tick = -1;
 
@@ -380,6 +384,15 @@ export class PlayerImpl implements Player {
       goldEarned: this._goldEarned,
       troops: this.troops(),
       allies: allies,
+      overlord: this._overlord?.smallID() ?? null,
+      subjects:
+        this._subjects.length === 0
+          ? EMPTY_NUMBER_ARRAY
+          : this._subjects.map((p) => p.smallID()),
+      outgoingPuppetRequests:
+        this._outgoingPuppetRequests.length === 0
+          ? EMPTY_STRING_ARRAY
+          : this._outgoingPuppetRequests.map((p) => p.id()),
       embargoes: embargoes,
       isTraitor: this.isTraitor(),
       traitorRemainingTicks: this.getTraitorRemainingTicks(),
@@ -910,6 +923,102 @@ export class PlayerImpl implements Player {
     return this._betrayalCount;
   }
 
+  overlord(): Player | null {
+    return this._overlord;
+  }
+
+  subjects(): Player[] {
+    return [...this._subjects];
+  }
+
+  isPuppet(): boolean {
+    return this._overlord !== null;
+  }
+
+  isPuppetOf(other: Player): boolean {
+    return this._overlord === other;
+  }
+
+  isOverlordOf(other: Player): boolean {
+    return this._subjects.includes(other);
+  }
+
+  isInPuppetRelation(other: Player): boolean {
+    return this.isPuppetOf(other) || this.isOverlordOf(other);
+  }
+
+  outgoingPuppetRequests(): Player[] {
+    return [...this._outgoingPuppetRequests];
+  }
+
+  isRequestingPuppetOf(other: Player): boolean {
+    return this._outgoingPuppetRequests.includes(other);
+  }
+
+  canSendPuppetRequest(other: Player): boolean {
+    if (other === this || !this.isAlive() || !other.isAlive()) return false;
+    if (this.isDisconnected() || other.isDisconnected()) return false;
+    if (this.isPuppet() || other.isPuppet()) return false;
+    if (this.isOverlordOf(other) || this.isAlliedWith(other)) return false;
+    return !this._outgoingPuppetRequests.includes(other);
+  }
+
+  requestPuppet(other: Player): boolean {
+    if (!this.canSendPuppetRequest(other)) return false;
+    this._outgoingPuppetRequests.push(other);
+    return true;
+  }
+
+  acceptPuppetRequest(requestor: Player): boolean {
+    if (this._overlord !== null || !this.isAlive() || !requestor.isAlive()) {
+      return false;
+    }
+    if (!requestor.isRequestingPuppetOf(this) || requestor.isPuppet()) {
+      return false;
+    }
+    (requestor as PlayerImpl)._outgoingPuppetRequests = (
+      requestor as PlayerImpl
+    )._outgoingPuppetRequests.filter((p) => p !== this);
+
+    this.removeAllAlliances();
+    requestor.removeAllAlliances();
+
+    this._overlord = requestor;
+    const subjects = (requestor as PlayerImpl)._subjects;
+    if (!subjects.includes(this)) {
+      subjects.push(this);
+    }
+
+    // Existing attacks are stopped by AttackExecution once isFriendly() sees
+    // the new relation on the next tick.
+    return true;
+  }
+
+  rejectPuppetRequest(requestor: Player): boolean {
+    if (!requestor.isRequestingPuppetOf(this)) return false;
+    (requestor as PlayerImpl)._outgoingPuppetRequests = (
+      requestor as PlayerImpl
+    )._outgoingPuppetRequests.filter((p) => p !== this);
+    return true;
+  }
+
+  releasePuppet(subject: Player): boolean {
+    if (!this.isOverlordOf(subject)) return false;
+    this._subjects = this._subjects.filter((p) => p !== subject);
+    (subject as PlayerImpl)._overlord = null;
+    return true;
+  }
+
+  declareIndependence(): boolean {
+    if (this._overlord === null) return false;
+    const overlord = this._overlord as PlayerImpl;
+    overlord._subjects = overlord._subjects.filter((p) => p !== this);
+    this._overlord = null;
+    this.updateRelation(overlord, -100);
+    overlord.updateRelation(this, -100);
+    return true;
+  }
+
   createAllianceRequest(recipient: Player): AllianceRequest | null {
     if (this.isAlliedWith(recipient)) {
       throw new Error(`cannot create alliance request, already allies`);
@@ -1202,6 +1311,7 @@ export class PlayerImpl implements Player {
   }
 
   canTrade(other: Player): boolean {
+    if (this.isInPuppetRelation(other)) return true;
     const embargo =
       other.hasEmbargoAgainst(this) || this.hasEmbargoAgainst(other);
     return !embargo && other.id() !== this.id();
@@ -1276,7 +1386,11 @@ export class PlayerImpl implements Player {
     if (other.isDisconnected() && !treatAFKFriendly) {
       return false;
     }
-    return this.isOnSameTeam(other) || this.isAlliedWith(other);
+    return (
+      this.isOnSameTeam(other) ||
+      this.isAlliedWith(other) ||
+      this.isInPuppetRelation(other)
+    );
   }
 
   gold(): Gold {
