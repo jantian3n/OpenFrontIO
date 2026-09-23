@@ -240,9 +240,11 @@ export function applyStateUpdate(target: PlayerState, pu: PlayerUpdate): void {
   if (pu.autonomy !== undefined) target.autonomy = pu.autonomy;
   if (pu.tributeRate !== undefined) target.tributeRate = pu.tributeRate;
   if (pu.outgoingSubjectRequests !== undefined) {
-    target.outgoingSubjectRequests = pu.outgoingSubjectRequests.map((request) => ({
-      ...request,
-    }));
+    target.outgoingSubjectRequests = pu.outgoingSubjectRequests.map(
+      (request) => ({
+        ...request,
+      }),
+    );
   }
   if (pu.targets !== undefined) target.targets = pu.targets.slice();
   if (pu.outgoingAllianceRequests !== undefined) {
