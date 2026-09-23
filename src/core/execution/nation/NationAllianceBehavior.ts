@@ -75,6 +75,22 @@ export class NationAllianceBehavior {
     }
   }
 
+  handleIndependenceRequests() {
+    for (const subject of this.player.subjects()) {
+      if (!subject.hasPendingIndependenceRequest()) continue;
+
+      const info = subject.subjectInfo();
+      if (info === null) continue;
+
+      const accept =
+        info.autonomy >= 90 ||
+        subject.troops() >= this.player.troops() ||
+        subject.numTilesOwned() >= this.player.numTilesOwned();
+
+      this.player.respondToIndependenceRequest(subject, accept);
+    }
+  }
+
   handleSubjectRequests() {
     for (const request of this.player.incomingSubjectRequests()) {
       const requestor = request.requestor();
