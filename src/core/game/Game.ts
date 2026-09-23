@@ -720,6 +720,22 @@ export interface Player {
   createAllianceRequest(recipient: Player): AllianceRequest | null;
   betrayals(): number;
 
+  // Puppet / subject diplomacy
+  overlord(): Player | null;
+  subjects(): Player[];
+  isPuppet(): boolean;
+  isPuppetOf(other: Player): boolean;
+  isOverlordOf(other: Player): boolean;
+  isInPuppetRelation(other: Player): boolean;
+  outgoingPuppetRequests(): Player[];
+  isRequestingPuppetOf(other: Player): boolean;
+  canSendPuppetRequest(other: Player): boolean;
+  requestPuppet(other: Player): boolean;
+  acceptPuppetRequest(requestor: Player): boolean;
+  rejectPuppetRequest(requestor: Player): boolean;
+  releasePuppet(subject: Player): boolean;
+  declareIndependence(): boolean;
+
   // Targeting
   canTarget(other: Player): boolean;
   target(other: Player): void;
@@ -1015,6 +1031,11 @@ export interface PlayerInteraction {
   canSendEmoji: boolean;
   canSendAllianceRequest: boolean;
   canBreakAlliance: boolean;
+  canSendPuppetRequest: boolean;
+  canAcceptPuppetRequest: boolean;
+  canRejectPuppetRequest: boolean;
+  canReleasePuppet: boolean;
+  canDeclareIndependence: boolean;
   canTarget: boolean;
   canDonateGold: boolean;
   canDonateTroops: boolean;
