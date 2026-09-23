@@ -12,6 +12,9 @@ export type SubjectAction =
   | "accept"
   | "reject"
   | "release"
+  | "request_independence"
+  | "accept_independence"
+  | "reject_independence"
   | "independence"
   | "intervene"
   | "decline_protection_call";
@@ -30,7 +33,12 @@ export class SubjectExecution implements Execution {
   ) {}
 
   init(mg: Game, _: number): void {
-    if (this.action === "independence") return;
+    if (
+      this.action === "independence" ||
+      this.action === "request_independence"
+    ) {
+      return;
+    }
 
     if (this.targetID === undefined || !mg.hasPlayer(this.targetID)) {
       console.warn(
@@ -85,6 +93,19 @@ export class SubjectExecution implements Execution {
       case "release":
         success =
           this.target !== null && this.player.releaseSubject(this.target);
+        break;
+      case "request_independence":
+        success = this.player.requestIndependence();
+        break;
+      case "accept_independence":
+        success =
+          this.target !== null &&
+          this.player.respondToIndependenceRequest(this.target, true);
+        break;
+      case "reject_independence":
+        success =
+          this.target !== null &&
+          this.player.respondToIndependenceRequest(this.target, false);
         break;
       case "independence":
         success = this.player.declareIndependence();
