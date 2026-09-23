@@ -13,6 +13,7 @@ import {
   DonateEventUpdate,
   EmojiUpdate,
   GameUpdateType,
+  ProtectionCallReplyUpdate,
   SubjectRequestReplyUpdate,
   TargetPlayerUpdate,
   UnitIncomingUpdate,
@@ -145,6 +146,10 @@ export class EventsDisplay extends LitElement implements Controller {
     [
       GameUpdateType.SubjectRequestReply,
       this.onSubjectRequestReplyEvent.bind(this),
+    ],
+    [
+      GameUpdateType.ProtectionCallReply,
+      this.onProtectionCallReplyEvent.bind(this),
     ],
   ] as const;
 
@@ -462,6 +467,34 @@ export class EventsDisplay extends LitElement implements Controller {
       highlight: true,
       createdAt: this.game.ticks(),
       focusID: other.smallID(),
+    });
+  }
+
+  private onProtectionCallReplyEvent(update: ProtectionCallReplyUpdate) {
+    const myPlayer = this.game.myPlayer();
+    if (!myPlayer || update.call.subjectID !== myPlayer.smallID()) return;
+
+    const overlord = this.game.playerBySmallID(
+      update.call.overlordID,
+    ) as PlayerView;
+    const attacker = this.game.playerBySmallID(
+      update.call.attackerID,
+    ) as PlayerView;
+
+    this.addEvent({
+      description: update.intervened
+        ? translateText("events_display.protection_intervened", {
+            overlord: overlord.displayName(),
+            attacker: attacker.displayName(),
+          })
+        : translateText("events_display.protection_declined", {
+            overlord: overlord.displayName(),
+            attacker: attacker.displayName(),
+          }),
+      type: MessageType.PROTECTION_CALL,
+      highlight: true,
+      createdAt: this.game.ticks(),
+      focusID: overlord.smallID(),
     });
   }
 
