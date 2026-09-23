@@ -172,6 +172,10 @@ export class AttackExecution implements Execution {
     this.mg.stats().attackMaxIncoming(this.target, this.attack.troops());
 
     if (this.target.isPlayer()) {
+      this.target.raiseProtectionCall(this._owner);
+    }
+
+    if (this.target.isPlayer()) {
       const difficulty = this.mg.config().gameConfig().difficulty;
       let relationChange: number;
       switch (difficulty) {
