@@ -597,7 +597,7 @@ export class PlayerView {
   }
 
   isSubject(): boolean {
-    return this.state.overlord !== null;
+    return (this.state.overlord ?? null) !== null;
   }
 
   isProtectorate(): boolean {
@@ -615,13 +615,14 @@ export class PlayerView {
   }
 
   overlord(): PlayerView | null {
-    return this.state.overlord === null
+    const overlord = this.state.overlord ?? null;
+    return overlord === null
       ? null
-      : (this.game.playerBySmallID(this.state.overlord) as PlayerView);
+      : (this.game.playerBySmallID(overlord) as PlayerView);
   }
 
   subjects(): PlayerView[] {
-    return this.state.subjects.map(
+    return (this.state.subjects ?? []).map(
       (id) => this.game.playerBySmallID(id) as PlayerView,
     );
   }
@@ -635,15 +636,15 @@ export class PlayerView {
   }
 
   autonomy(): number | null {
-    return this.state.autonomy;
+    return this.state.autonomy ?? null;
   }
 
   tributeRate(): number | null {
-    return this.state.tributeRate;
+    return this.state.tributeRate ?? null;
   }
 
   isSubjectOf(other: PlayerView): boolean {
-    return this.state.overlord === other.smallID();
+    return (this.state.overlord ?? null) === other.smallID();
   }
 
   isPuppetOf(other: PlayerView): boolean {
@@ -651,7 +652,7 @@ export class PlayerView {
   }
 
   isOverlordOf(other: PlayerView): boolean {
-    return this.state.subjects.includes(other.smallID());
+    return (this.state.subjects ?? []).includes(other.smallID());
   }
 
   isInSubjectRelation(other: PlayerView): boolean {
@@ -669,7 +670,7 @@ export class PlayerView {
     other: PlayerView,
     requestType?: SubjectRequestType,
   ): boolean {
-    return this.state.outgoingSubjectRequests.some(
+    return (this.state.outgoingSubjectRequests ?? []).some(
       (request) =>
         request.recipientID === other.id() &&
         (requestType === undefined || request.requestType === requestType),
