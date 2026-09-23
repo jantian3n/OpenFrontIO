@@ -1,9 +1,4 @@
-import {
-  Player,
-  SubjectRequest,
-  SubjectRequestType,
-  Tick,
-} from "./Game";
+import { Player, SubjectRequest, SubjectRequestType, Tick } from "./Game";
 import { GameUpdateType, SubjectRequestUpdate } from "./GameUpdates";
 
 export class SubjectRequestImpl implements SubjectRequest {
