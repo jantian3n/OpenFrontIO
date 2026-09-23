@@ -95,6 +95,7 @@ export class Executor {
           intent.action,
           intent.target,
           intent.requestType,
+          intent.subject,
         );
       case "targetPlayer":
         return new TargetPlayerExecution(player, intent.target);
