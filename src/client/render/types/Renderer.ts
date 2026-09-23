@@ -88,7 +88,16 @@ export interface PlayerState {
   allies: number[];
   overlord: number | null;
   subjects: number[];
-  outgoingPuppetRequests: string[];
+  subjectKind: "protectorate" | "puppet" | null;
+  subjectOrigin: "protection" | "subjugation" | null;
+  subjectCreatedAt: number | null;
+  autonomy: number | null;
+  tributeRate: number | null;
+  outgoingSubjectRequests: {
+    recipientID: string;
+    requestType: "protection" | "subjugation";
+    createdAt: number;
+  }[];
   embargoes: number[];
   targets: number[];
   outgoingAttacks: AttackData[];
