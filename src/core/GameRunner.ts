@@ -270,6 +270,7 @@ export class GameRunner {
         canBreakAlliance: player.isAlliedWith(other),
         canRequestProtection: player.canRequestProtection(other),
         canDemandSubjugation: player.canDemandSubjugation(other),
+        canRequestIndependence: player.canRequestIndependence(other),
         pendingSubjectRequest,
         canReleaseSubject: player.isOverlordOf(other),
         canDeclareIndependence:
