@@ -252,6 +252,7 @@ export class PlayerPanel extends LitElement implements Controller {
       | "accept"
       | "reject"
       | "release"
+      | "request_independence"
       | "independence",
     target?: PlayerView,
     requestType?: "protection" | "subjugation",
@@ -921,6 +922,8 @@ export class PlayerPanel extends LitElement implements Controller {
     const pendingSubjectRequest =
       this.actions?.interaction?.pendingSubjectRequest;
     const canReleaseSubject = this.actions?.interaction?.canReleaseSubject;
+    const canRequestIndependence =
+      this.actions?.interaction?.canRequestIndependence;
     const canDeclareIndependence =
       this.actions?.interaction?.canDeclareIndependence;
     const canTarget = this.actions?.interaction?.canTarget;
@@ -1102,6 +1105,17 @@ export class PlayerPanel extends LitElement implements Controller {
                       type: "yellow",
                     })
                   : ""}
+                ${canRequestIndependence
+                  ? actionButton({
+                      onClick: (e: MouseEvent) =>
+                        this.handleSubjectAction(e, "request_independence"),
+                      icon: breakAllianceIcon,
+                      iconAlt: "Request Independence",
+                      title: translateText("player_panel.request_independence"),
+                      label: translateText("player_panel.request_independence"),
+                      type: "yellow",
+                    })
+                  : ""}
                 ${canDeclareIndependence
                   ? actionButton({
                       onClick: (e: MouseEvent) =>
@@ -1112,17 +1126,27 @@ export class PlayerPanel extends LitElement implements Controller {
                       label: translateText("player_panel.declare_independence"),
                       type: "red",
                     })
-                  : isMyOverlord
+                  : isMyOverlord && !canRequestIndependence
                     ? actionButton({
                         onClick: () => {},
                         icon: breakAllianceIcon,
-                        iconAlt: "Declare Independence",
-                        title: translateText(
-                          "player_panel.independence_requires_autonomy",
-                        ),
-                        label: translateText(
-                          "player_panel.independence_requires_autonomy",
-                        ),
+                        iconAlt: "Independence",
+                        title:
+                          (my.autonomy() ?? 0) < 80
+                            ? translateText(
+                                "player_panel.independence_request_requires_autonomy",
+                              )
+                            : translateText(
+                                "player_panel.independence_request_pending",
+                              ),
+                        label:
+                          (my.autonomy() ?? 0) < 80
+                            ? translateText(
+                                "player_panel.independence_request_requires_autonomy",
+                              )
+                            : translateText(
+                                "player_panel.independence_request_pending",
+                              ),
                         type: "red",
                         disabled: true,
                       })
