@@ -443,6 +443,12 @@ export interface SubjectRequest {
   createdAt(): Tick;
 }
 
+export interface ProtectionCall {
+  subject(): Player;
+  attacker(): Player;
+  createdAt(): Tick;
+}
+
 export interface MutableAlliance extends Alliance {
   expire(): void;
   other(player: Player): Player;
@@ -773,7 +779,16 @@ export interface Player {
     requestType: SubjectRequestType,
   ): boolean;
   releaseSubject(subject: Player): boolean;
+  incomingProtectionCalls(): ProtectionCall[];
+  raiseProtectionCall(attacker: Player): boolean;
+  respondToProtectionCall(
+    subject: Player,
+    attacker: Player,
+    intervene: boolean,
+  ): boolean;
+  canDeclareIndependence(): boolean;
   declareIndependence(): boolean;
+  processSubjectRelationTick(): void;
 
   // Targeting
   canTarget(other: Player): boolean;
@@ -1109,6 +1124,7 @@ export enum MessageType {
   ALLIANCE_BROKEN,
   ALLIANCE_EXPIRED,
   SUBJECT_REQUEST,
+  PROTECTION_CALL,
   DONATION_SENT,
   DONATION_RECEIVED,
   CHAT,
@@ -1145,6 +1161,7 @@ export const MESSAGE_TYPE_CATEGORIES: Record<MessageType, MessageCategory> = {
   [MessageType.ALLIANCE_BROKEN]: MessageCategory.ALLIANCE,
   [MessageType.ALLIANCE_EXPIRED]: MessageCategory.ALLIANCE,
   [MessageType.SUBJECT_REQUEST]: MessageCategory.ALLIANCE,
+  [MessageType.PROTECTION_CALL]: MessageCategory.ALLIANCE,
   [MessageType.RENEW_ALLIANCE]: MessageCategory.ALLIANCE,
   [MessageType.DONATION_SENT]: MessageCategory.TRADE,
   [MessageType.DONATION_RECEIVED]: MessageCategory.TRADE,
