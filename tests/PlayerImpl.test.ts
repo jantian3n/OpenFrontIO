@@ -181,6 +181,22 @@ describe("PlayerImpl", () => {
       expect(other.canTarget(player)).toBe(false);
     });
 
+    test("an alliance can peacefully upgrade into a protectorate", () => {
+      makePlayerDominant();
+      const allianceRequest = other.createAllianceRequest(player);
+      expect(allianceRequest).not.toBeNull();
+      allianceRequest!.accept();
+      expect(other.isAlliedWith(player)).toBe(true);
+
+      expect(other.requestProtection(player)).toBe(true);
+      expect(player.acceptSubjectRequest(other, "protection")).toBe(true);
+
+      expect(other.isAlliedWith(player)).toBe(false);
+      expect(other.isProtectorate()).toBe(true);
+      expect(other.isTraitor()).toBe(false);
+      expect(player.isTraitor()).toBe(false);
+    });
+
     test("weak player can seek protection from a stronger player", () => {
       makePlayerDominant();
 
