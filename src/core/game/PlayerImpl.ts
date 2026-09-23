@@ -110,7 +110,8 @@ class ProtectionCallRecord implements ProtectionCall {
 
 const SUBJECT_TRIBUTE_INTERVAL_TICKS = 300;
 const SUBJECT_AUTONOMY_INTERVAL_TICKS = 600;
-const SUBJECT_INDEPENDENCE_AUTONOMY = 80;
+const SUBJECT_INDEPENDENCE_REQUEST_AUTONOMY = 80;
+const SUBJECT_PEACEFUL_INDEPENDENCE_AUTONOMY = 100;
 const SUBJECT_PROTECTION_OUTCOME_COOLDOWN_TICKS = 300;
 // A state that starts a conflict cannot immediately turn the opponent's
 // retaliation into a protection claim. Active attacks extend this implicitly.
@@ -211,6 +212,8 @@ export class PlayerImpl implements Player {
   private _lastProtectionCallTick = new Map<string, Tick>();
   private _lastAggressionTick = new Map<PlayerID, Tick>();
   private _lastProtectionOutcomeTick: Tick = -1;
+  private _independenceRequestTick: Tick | null = null;
+  private _lastIndependenceRequestTick: Tick = -1;
   private _subjectLastGoldEarned: Gold = 0n;
   private _lastSubjectEconomyTick: Tick = -1;
   private _lastSubjectAutonomyTick: Tick = -1;
@@ -1259,6 +1262,8 @@ export class PlayerImpl implements Player {
     subject._lastSubjectEconomyTick = this.mg.ticks();
     subject._lastSubjectAutonomyTick = this.mg.ticks();
     subject._lastProtectionOutcomeTick = -1;
+    subject._independenceRequestTick = null;
+    subject._lastIndependenceRequestTick = -1;
     subject._subjectInfo =
       requestType === "protection"
         ? {
@@ -1366,13 +1371,110 @@ export class PlayerImpl implements Player {
   releaseSubject(subject: Player): boolean {
     if (!this.isOverlordOf(subject)) return false;
     this.cancelProtectionCallsForSubject(subject);
-    this._subjects = this._subjects.filter((p) => p !== subject);
     const subjectImpl = subject as PlayerImpl;
+
+    if (subjectImpl.hasPendingIndependenceRequest()) {
+      const createdAt = subjectImpl._independenceRequestTick!;
+      subjectImpl._independenceRequestTick = null;
+      this.mg.addUpdate({
+        type: GameUpdateType.IndependenceRequestReply,
+        request: {
+          type: GameUpdateType.IndependenceRequest,
+          subjectID: subject.smallID(),
+          overlordID: this.smallID(),
+          createdAt,
+        },
+        accepted: false,
+        cancelled: true,
+      });
+    }
+
+    this._subjects = this._subjects.filter((p) => p !== subject);
     subjectImpl._overlord = null;
     subjectImpl._subjectInfo = null;
     subjectImpl._lastSubjectEconomyTick = -1;
     subjectImpl._lastSubjectAutonomyTick = -1;
     subjectImpl._lastProtectionOutcomeTick = -1;
+    subjectImpl._independenceRequestTick = null;
+    subjectImpl._lastIndependenceRequestTick = -1;
+    return true;
+  }
+
+  private pruneIndependenceRequest(): void {
+    if (this._independenceRequestTick === null) return;
+    if (
+      this.mg.ticks() - this._independenceRequestTick >=
+      this.mg.config().allianceRequestDuration()
+    ) {
+      this._independenceRequestTick = null;
+    }
+  }
+
+  hasPendingIndependenceRequest(): boolean {
+    this.pruneIndependenceRequest();
+    return this._independenceRequestTick !== null;
+  }
+
+  canRequestIndependence(): boolean {
+    this.pruneIndependenceRequest();
+    if (
+      this._overlord === null ||
+      this._subjectInfo === null ||
+      !this._overlord.isAlive()
+    ) {
+      return false;
+    }
+    if (
+      this._subjectInfo.autonomy < SUBJECT_INDEPENDENCE_REQUEST_AUTONOMY ||
+      this._subjectInfo.autonomy >= SUBJECT_PEACEFUL_INDEPENDENCE_AUTONOMY
+    ) {
+      return false;
+    }
+    if (this._independenceRequestTick !== null) return false;
+    return (
+      this._lastIndependenceRequestTick < 0 ||
+      this.mg.ticks() - this._lastIndependenceRequestTick >=
+        this.mg.config().allianceRequestCooldown()
+    );
+  }
+
+  requestIndependence(): boolean {
+    if (!this.canRequestIndependence() || this._overlord === null) return false;
+
+    const createdAt = this.mg.ticks();
+    this._independenceRequestTick = createdAt;
+    this._lastIndependenceRequestTick = createdAt;
+    this.mg.addUpdate({
+      type: GameUpdateType.IndependenceRequest,
+      subjectID: this.smallID(),
+      overlordID: this._overlord.smallID(),
+      createdAt,
+    });
+    return true;
+  }
+
+  respondToIndependenceRequest(subject: Player, accept: boolean): boolean {
+    if (!this.isOverlordOf(subject)) return false;
+    const subjectImpl = subject as PlayerImpl;
+    if (!subjectImpl.hasPendingIndependenceRequest()) return false;
+
+    const createdAt = subjectImpl._independenceRequestTick!;
+    subjectImpl._independenceRequestTick = null;
+
+    if (accept && !this.releaseSubject(subject)) {
+      return false;
+    }
+
+    this.mg.addUpdate({
+      type: GameUpdateType.IndependenceRequestReply,
+      request: {
+        type: GameUpdateType.IndependenceRequest,
+        subjectID: subject.smallID(),
+        overlordID: this.smallID(),
+        createdAt,
+      },
+      accepted: accept,
+    });
     return true;
   }
 
@@ -1592,7 +1694,7 @@ export class PlayerImpl implements Player {
     return (
       this._overlord !== null &&
       this._subjectInfo !== null &&
-      this._subjectInfo.autonomy >= SUBJECT_INDEPENDENCE_AUTONOMY
+      this._subjectInfo.autonomy >= SUBJECT_PEACEFUL_INDEPENDENCE_AUTONOMY
     );
   }
 
@@ -1660,17 +1762,11 @@ export class PlayerImpl implements Player {
 
   declareIndependence(): boolean {
     if (!this.canDeclareIndependence() || this._overlord === null) return false;
+
+    // 100 autonomy represents complete peaceful sovereignty. This is not a
+    // hostile break and therefore must not force either side to -100 relation.
     const overlord = this._overlord as PlayerImpl;
-    overlord.cancelProtectionCallsForSubject(this);
-    overlord._subjects = overlord._subjects.filter((p) => p !== this);
-    this._overlord = null;
-    this._subjectInfo = null;
-    this._lastSubjectEconomyTick = -1;
-    this._lastSubjectAutonomyTick = -1;
-    this._lastProtectionOutcomeTick = -1;
-    this.updateRelation(overlord, -100);
-    overlord.updateRelation(this, -100);
-    return true;
+    return overlord.releaseSubject(this);
   }
 
   createAllianceRequest(recipient: Player): AllianceRequest | null {
