@@ -426,11 +426,12 @@ export enum SubjectRelationKind {
   Puppet = "puppet",
 }
 
-export type SubjectRequestType = "protection" | "subjugation";
+export type SubjectFormationType = "protection" | "subjugation";
+export type SubjectRequestType = SubjectFormationType | "independence";
 
 export interface SubjectRelationInfo {
   kind: SubjectRelationKind;
-  origin: SubjectRequestType;
+  origin: SubjectFormationType;
   createdAt: Tick;
   autonomy: number;
   tributeRate: number;
@@ -768,8 +769,10 @@ export interface Player {
   ): boolean;
   canRequestProtection(other: Player): boolean;
   canDemandSubjugation(other: Player): boolean;
+  canRequestIndependence(other: Player): boolean;
   requestProtection(other: Player): boolean;
   demandSubjugation(other: Player): boolean;
+  requestIndependence(other: Player): boolean;
   acceptSubjectRequest(
     requestor: Player,
     requestType: SubjectRequestType,
@@ -1090,6 +1093,7 @@ export interface PlayerInteraction {
   canBreakAlliance: boolean;
   canRequestProtection: boolean;
   canDemandSubjugation: boolean;
+  canRequestIndependence: boolean;
   pendingSubjectRequest?: SubjectRequestType;
   canReleaseSubject: boolean;
   canDeclareIndependence: boolean;
