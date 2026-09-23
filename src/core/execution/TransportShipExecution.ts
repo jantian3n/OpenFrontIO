@@ -102,18 +102,7 @@ export class TransportShipExecution implements Execution {
     }
 
     if (this.target.isPlayer()) {
-      const targetPlayer = this.target as Player;
-      const activeRetaliation = this.attacker
-        .incomingAttacks()
-        .some(
-          (incoming) =>
-            incoming.isActive() && incoming.attacker() === targetPlayer,
-        );
-      const recentRetaliation =
-        targetPlayer.hasRecentAggressionAgainst(this.attacker);
-      if (!activeRetaliation && !recentRetaliation) {
-        this.attacker.recordAggressionAgainst(targetPlayer);
-      }
+      this.attacker.registerHostileActionAgainst(this.target as Player);
     }
 
     this.troops ??= this.mg
