@@ -1193,6 +1193,35 @@ export class PlayerImpl implements Player {
     }
   }
 
+  private cancelDirectNukesBetween(a: Player, b: Player): void {
+    const nukeTypes = [
+      UnitType.AtomBomb,
+      UnitType.HydrogenBomb,
+      UnitType.MIRV,
+      UnitType.MIRVWarhead,
+    ];
+
+    for (const launcher of [a, b]) {
+      const other = launcher === a ? b : a;
+      for (const unit of launcher.units(nukeTypes)) {
+        if (!unit.isActive() || unit.reachedTarget()) continue;
+
+        const targetTile = unit.targetTile();
+        const directTarget =
+          unit.type() === UnitType.MIRV
+            ? (unit.targetPlayer() ??
+              (targetTile !== undefined ? this.mg.owner(targetTile) : null))
+            : targetTile !== undefined
+              ? this.mg.owner(targetTile)
+              : null;
+
+        if (directTarget === other) {
+          unit.delete(false);
+        }
+      }
+    }
+  }
+
   acceptSubjectRequest(
     requestor: Player,
     requestType: SubjectRequestType,
@@ -1250,6 +1279,10 @@ export class PlayerImpl implements Player {
     if (!overlord._subjects.includes(subject)) {
       overlord._subjects.push(subject);
     }
+
+    // Existing conventional attacks retreat as soon as isFriendly() changes;
+    // strategic weapons need explicit neutralization because they keep flying.
+    this.cancelDirectNukesBetween(subject, overlord);
 
     if (subject._subjectInfo.kind === SubjectRelationKind.Puppet) {
       this.mg.rejectAllianceRequestsInvolving(subject);
