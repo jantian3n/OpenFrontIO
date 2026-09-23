@@ -411,7 +411,7 @@ export class GameImpl implements Game {
     const recipient = request.recipient();
 
     if (requestor.isPuppet() || recipient.isPuppet()) {
-      this.rejectAllianceRequest(request);
+      request.reject();
       return;
     }
 
