@@ -903,7 +903,7 @@
     "protectorate": "保护国",
     "puppet": "傀儡国",
     "autonomy": "初始自主度",
-    "tribute_rate": "贡金比例",
+    "tribute_rate": "贡金比例（预设）",
     "send_alliance": "请求结盟",
     "send_troops": "发送军队",
     "send_gold": "发送黄金",
