@@ -56,11 +56,13 @@ export class NationAllianceBehavior {
           this.player.relation(requestor) >= Relation.Neutral &&
           this.player.subjects().length < 4;
 
-        if (acceptable) {
-          this.player.acceptSubjectRequest(requestor, "protection");
-        } else {
-          this.player.rejectSubjectRequest(requestor, "protection");
+        if (
+          acceptable &&
+          this.player.acceptSubjectRequest(requestor, "protection")
+        ) {
+          break;
         }
+        this.player.rejectSubjectRequest(requestor, "protection");
         continue;
       }
 
@@ -76,10 +78,11 @@ export class NationAllianceBehavior {
         this.isClearlyWeakerThan(requestor) &&
         this.random.nextInt(0, 100) < acceptChance
       ) {
-        this.player.acceptSubjectRequest(requestor, "subjugation");
-      } else {
-        this.player.rejectSubjectRequest(requestor, "subjugation");
+        if (this.player.acceptSubjectRequest(requestor, "subjugation")) {
+          break;
+        }
       }
+      this.player.rejectSubjectRequest(requestor, "subjugation");
     }
   }
 
@@ -102,6 +105,7 @@ export class NationAllianceBehavior {
     const candidates = this.game
       .players()
       .filter((candidate) => candidate !== this.player)
+      .filter((candidate) => candidate.type() !== PlayerType.Bot)
       .filter((candidate) => this.player.canRequestProtection(candidate))
       .filter(
         (candidate) => this.player.relation(candidate) >= Relation.Neutral,
