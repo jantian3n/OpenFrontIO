@@ -1211,6 +1211,10 @@ export class PlayerImpl implements Player {
       overlord._subjects.push(subject);
     }
 
+    if (subject._subjectInfo.kind === SubjectRelationKind.Puppet) {
+      this.mg.rejectAllianceRequestsInvolving(subject);
+    }
+
     this.clearSubjectRequestsInvolving(subject, overlord);
     this.mg.addUpdate({
       type: GameUpdateType.SubjectRequestReply,
