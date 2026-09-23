@@ -177,6 +177,7 @@ export class PlayerImpl implements Player {
   private _subjects: Player[] = [];
   private _subjectInfo: SubjectRelationInfo | null = null;
   private _outgoingSubjectRequests: SubjectRequestImpl[] = [];
+  private _lastSubjectRequestTick = new Map<PlayerID, Tick>();
 
   private lastDeleteUnitTick: Tick = -1;
   private lastEmbargoAllTick: Tick = -1;
@@ -400,7 +401,7 @@ export class PlayerImpl implements Player {
       subjectCreatedAt: this._subjectInfo?.createdAt ?? null,
       autonomy: this._subjectInfo?.autonomy ?? null,
       tributeRate: this._subjectInfo?.tributeRate ?? null,
-      outgoingSubjectRequests: this._outgoingSubjectRequests.map((request) => ({
+      outgoingSubjectRequests: this.outgoingSubjectRequests().map((request) => ({
         recipientID: request.recipient().id(),
         requestType: request.requestType(),
         createdAt: request.createdAt(),
@@ -822,6 +823,9 @@ export class PlayerImpl implements Player {
     if (this.mg.config().disableAlliances()) {
       return false;
     }
+    if (this.isPuppet() || other.isPuppet()) {
+      return false;
+    }
     if (other === this) {
       return false;
     }
@@ -1081,13 +1085,23 @@ export class PlayerImpl implements Player {
     return (subject as PlayerImpl).isMeaningfullyWeakerThan(overlord);
   }
 
+  private subjectRequestCooldownPassed(other: Player): boolean {
+    const last = this._lastSubjectRequestTick.get(other.id());
+    return (
+      last === undefined ||
+      this.mg.ticks() - last >= this.mg.config().allianceRequestCooldown()
+    );
+  }
+
   canRequestProtection(other: Player): boolean {
     if (!this.canFormSubjectRelation(this, other, true)) return false;
+    if (!this.subjectRequestCooldownPassed(other)) return false;
     return !this.hasPendingSubjectRequestWith(other);
   }
 
   canDemandSubjugation(other: Player): boolean {
     if (!this.canFormSubjectRelation(other, this, false)) return false;
+    if (!this.subjectRequestCooldownPassed(other)) return false;
     return !this.hasPendingSubjectRequestWith(other);
   }
 
@@ -1108,6 +1122,7 @@ export class PlayerImpl implements Player {
       this.mg.ticks(),
     );
     this._outgoingSubjectRequests.push(request);
+    this._lastSubjectRequestTick.set(other.id(), this.mg.ticks());
     this.mg.addUpdate(request.toUpdate());
     return true;
   }
@@ -1576,6 +1591,7 @@ export class PlayerImpl implements Player {
   }
 
   addEmbargo(other: Player, isTemporary: boolean): void {
+    if (this.isInSubjectRelation(other)) return;
     const embargo = this.embargoes.get(other.id());
     if (embargo !== undefined && !embargo.isTemporary) return;
 
@@ -1640,10 +1656,13 @@ export class PlayerImpl implements Player {
     if (other.isDisconnected() && !treatAFKFriendly) {
       return false;
     }
+    const sharedOverlord =
+      this.overlord() !== null && this.overlord() === other.overlord();
     return (
       this.isOnSameTeam(other) ||
       this.isAlliedWith(other) ||
-      this.isInSubjectRelation(other)
+      this.isInSubjectRelation(other) ||
+      sharedOverlord
     );
   }
 
