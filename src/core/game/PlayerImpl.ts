@@ -959,6 +959,9 @@ export class PlayerImpl implements Player {
     if (other === this || !this.isAlive() || !other.isAlive()) return false;
     if (this.isDisconnected() || other.isDisconnected()) return false;
     if (this.isPuppet() || other.isPuppet()) return false;
+    // V1 keeps the hierarchy one level deep: an existing overlord cannot
+    // itself become somebody else's subject.
+    if (other.subjects().length > 0) return false;
     if (this.isOverlordOf(other) || this.isAlliedWith(other)) return false;
     if (other.isRequestingPuppetOf(this)) return false;
     return !this._outgoingPuppetRequests.includes(other);
@@ -981,9 +984,9 @@ export class PlayerImpl implements Player {
     (requestor as PlayerImpl)._outgoingPuppetRequests = [];
     this._outgoingPuppetRequests = [];
 
-    this.removeAllAlliances();
-    requestor.removeAllAlliances();
-
+    // A puppet relation is independent from the overlord's unrelated
+    // alliances. Direct alliances with this player are already forbidden by
+    // canSendPuppetRequest(), so there is nothing to tear down here.
     this._overlord = requestor;
     const subjects = (requestor as PlayerImpl)._subjects;
     if (!subjects.includes(this)) {
