@@ -1220,6 +1220,9 @@ export class PlayerImpl implements Player {
     }
 
     subject._overlord = overlord;
+    subject._subjectLastGoldEarned = subject._goldEarned;
+    subject._lastSubjectEconomyTick = this.mg.ticks();
+    subject._lastSubjectAutonomyTick = this.mg.ticks();
     subject._subjectInfo =
       requestType === "protection"
         ? {
@@ -1281,15 +1284,205 @@ export class PlayerImpl implements Player {
     const subjectImpl = subject as PlayerImpl;
     subjectImpl._overlord = null;
     subjectImpl._subjectInfo = null;
+    subjectImpl._lastSubjectEconomyTick = -1;
+    subjectImpl._lastSubjectAutonomyTick = -1;
+    this._pendingProtectionCalls = this._pendingProtectionCalls.filter(
+      (call) => call.subject() !== subject,
+    );
     return true;
   }
 
+  private protectionCallKey(subject: Player, attacker: Player): string {
+    return `${subject.id()}|${attacker.id()}`;
+  }
+
+  private pruneExpiredProtectionCalls(): void {
+    const duration = this.mg.config().allianceRequestDuration();
+    this._pendingProtectionCalls = this._pendingProtectionCalls.filter(
+      (call) => this.mg.ticks() - call.createdAt() < duration,
+    );
+  }
+
+  incomingProtectionCalls(): ProtectionCall[] {
+    this.pruneExpiredProtectionCalls();
+    return [...this._pendingProtectionCalls];
+  }
+
+  raiseProtectionCall(attacker: Player): boolean {
+    if (
+      this._overlord === null ||
+      this._subjectInfo === null ||
+      !this.isAlive() ||
+      !attacker.isAlive() ||
+      attacker === this ||
+      attacker === this._overlord
+    ) {
+      return false;
+    }
+
+    const overlord = this._overlord as PlayerImpl;
+    overlord.pruneExpiredProtectionCalls();
+
+    const key = overlord.protectionCallKey(this, attacker);
+    const last = overlord._lastProtectionCallTick.get(key);
+    if (
+      last !== undefined &&
+      this.mg.ticks() - last < this.mg.config().allianceRequestDuration()
+    ) {
+      return false;
+    }
+
+    const call = new ProtectionCallRecord(this, attacker, this.mg.ticks());
+    overlord._pendingProtectionCalls.push(call);
+    overlord._lastProtectionCallTick.set(key, this.mg.ticks());
+    this.mg.addUpdate({
+      type: GameUpdateType.ProtectionCall,
+      overlordID: overlord.smallID(),
+      subjectID: this.smallID(),
+      attackerID: attacker.smallID(),
+      createdAt: call.createdAt(),
+    });
+    return true;
+  }
+
+  respondToProtectionCall(
+    subject: Player,
+    attacker: Player,
+    intervene: boolean,
+  ): boolean {
+    this.pruneExpiredProtectionCalls();
+    const callIndex = this._pendingProtectionCalls.findIndex(
+      (call) => call.subject() === subject && call.attacker() === attacker,
+    );
+    if (callIndex < 0 || !subject.isSubjectOf(this)) return false;
+
+    if (intervene && this.isOnSameTeam(attacker)) {
+      return false;
+    }
+
+    const [call] = this._pendingProtectionCalls.splice(callIndex, 1);
+    const subjectImpl = subject as PlayerImpl;
+
+    if (intervene) {
+      const alliance = this.allianceWith(attacker);
+      if (alliance !== null) {
+        this.breakAlliance(alliance);
+      }
+
+      this.updateRelation(attacker, -100);
+      attacker.updateRelation(this, -70);
+      if (this.canTarget(attacker)) {
+        this.target(attacker);
+      }
+
+      if (subjectImpl._subjectInfo !== null) {
+        subjectImpl._subjectInfo.autonomy = Math.max(
+          0,
+          subjectImpl._subjectInfo.autonomy - 2,
+        );
+      }
+    } else if (subjectImpl._subjectInfo !== null) {
+      const autonomyPenalty =
+        subjectImpl._subjectInfo.kind === SubjectRelationKind.Protectorate
+          ? 10
+          : 5;
+      subjectImpl._subjectInfo.autonomy = Math.min(
+        100,
+        subjectImpl._subjectInfo.autonomy + autonomyPenalty,
+      );
+    }
+
+    this.mg.addUpdate({
+      type: GameUpdateType.ProtectionCallReply,
+      call: {
+        type: GameUpdateType.ProtectionCall,
+        overlordID: this.smallID(),
+        subjectID: subject.smallID(),
+        attackerID: attacker.smallID(),
+        createdAt: call.createdAt(),
+      },
+      intervened: intervene,
+    });
+    return true;
+  }
+
+  canDeclareIndependence(): boolean {
+    return (
+      this._overlord !== null &&
+      this._subjectInfo !== null &&
+      this._subjectInfo.autonomy >= SUBJECT_INDEPENDENCE_AUTONOMY
+    );
+  }
+
+  processSubjectRelationTick(): void {
+    if (this._overlord === null || this._subjectInfo === null) return;
+
+    const now = this.mg.ticks();
+    const overlord = this._overlord as PlayerImpl;
+
+    if (
+      this._lastSubjectEconomyTick < 0 ||
+      now - this._lastSubjectEconomyTick >= SUBJECT_TRIBUTE_INTERVAL_TICKS
+    ) {
+      const earnedSinceLast = this._goldEarned - this._subjectLastGoldEarned;
+      this._subjectLastGoldEarned = this._goldEarned;
+      this._lastSubjectEconomyTick = now;
+
+      if (earnedSinceLast > 0n && this._subjectInfo.tributeRate > 0) {
+        const due =
+          (earnedSinceLast * BigInt(this._subjectInfo.tributeRate)) / 100n;
+        const paid = due > this._gold ? this._gold : due;
+        if (paid > 0n) {
+          this.removeGold(paid);
+          overlord.addGold(paid);
+        }
+      }
+    }
+
+    if (
+      this._lastSubjectAutonomyTick < 0 ||
+      now - this._lastSubjectAutonomyTick >= SUBJECT_AUTONOMY_INTERVAL_TICKS
+    ) {
+      this._lastSubjectAutonomyTick = now;
+
+      const troopRatio =
+        overlord.troops() > 0 ? this.troops() / overlord.troops() : 1;
+      const tileRatio =
+        overlord.numTilesOwned() > 0
+          ? this.numTilesOwned() / overlord.numTilesOwned()
+          : 1;
+
+      let delta =
+        this._subjectInfo.kind === SubjectRelationKind.Protectorate ? 1 : 0;
+
+      if (troopRatio >= 0.9 && tileRatio >= 0.9) {
+        delta += 2;
+      } else if (troopRatio >= 0.6 || tileRatio >= 0.6) {
+        delta += 1;
+      }
+
+      if (troopRatio <= 0.3 && tileRatio <= 0.3) {
+        delta -= 1;
+      }
+
+      this._subjectInfo.autonomy = Math.max(
+        0,
+        Math.min(100, this._subjectInfo.autonomy + delta),
+      );
+    }
+  }
+
   declareIndependence(): boolean {
-    if (this._overlord === null) return false;
+    if (!this.canDeclareIndependence() || this._overlord === null) return false;
     const overlord = this._overlord as PlayerImpl;
     overlord._subjects = overlord._subjects.filter((p) => p !== this);
+    overlord._pendingProtectionCalls = overlord._pendingProtectionCalls.filter(
+      (call) => call.subject() !== this,
+    );
     this._overlord = null;
     this._subjectInfo = null;
+    this._lastSubjectEconomyTick = -1;
+    this._lastSubjectAutonomyTick = -1;
     this.updateRelation(overlord, -100);
     overlord.updateRelation(this, -100);
     return true;
