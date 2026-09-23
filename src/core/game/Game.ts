@@ -774,15 +774,8 @@ export interface Player {
   ): boolean;
   releaseSubject(subject: Player): boolean;
 
-  // Backward-compatible V1 puppet helpers.
-  outgoingPuppetRequests(): Player[];
-  isRequestingPuppetOf(other: Player): boolean;
-  canSendPuppetRequest(other: Player): boolean;
-  requestPuppet(other: Player): boolean;
-  acceptPuppetRequest(requestor: Player): boolean;
-  rejectPuppetRequest(requestor: Player): boolean;
-  releasePuppet(subject: Player): boolean;
   declareIndependence(): boolean;
+
 
   // Targeting
   canTarget(other: Player): boolean;
