@@ -46,6 +46,94 @@ export class NationAllianceBehavior {
     }
   }
 
+  handleSubjectRequests() {
+    for (const request of this.player.incomingSubjectRequests()) {
+      const requestor = request.requestor();
+
+      if (request.requestType() === "protection") {
+        const acceptable =
+          !requestor.isTraitor() &&
+          this.player.relation(requestor) >= Relation.Neutral &&
+          this.player.subjects().length < 4;
+
+        if (acceptable) {
+          this.player.acceptSubjectRequest(requestor, "protection");
+        } else {
+          this.player.rejectSubjectRequest(requestor, "protection");
+        }
+        continue;
+      }
+
+      const { difficulty } = this.game.config().gameConfig();
+      const acceptChance = {
+        [Difficulty.Easy]: 70,
+        [Difficulty.Medium]: 50,
+        [Difficulty.Hard]: 30,
+        [Difficulty.Impossible]: 15,
+      }[difficulty];
+
+      if (
+        this.isClearlyWeakerThan(requestor) &&
+        this.random.nextInt(0, 100) < acceptChance
+      ) {
+        this.player.acceptSubjectRequest(requestor, "subjugation");
+      } else {
+        this.player.rejectSubjectRequest(requestor, "subjugation");
+      }
+    }
+  }
+
+  maybeSeekProtection(borderingEnemies: Player[]): boolean {
+    if (
+      this.player.isSubject() ||
+      this.player.subjects().length > 0 ||
+      this.player.outgoingSubjectRequests().length > 0
+    ) {
+      return false;
+    }
+
+    const underSeriousThreat = borderingEnemies.some((enemy) =>
+      this.isClearlyWeakerThan(enemy),
+    );
+    if (!underSeriousThreat || !this.random.chance(6)) {
+      return false;
+    }
+
+    const candidates = this.game
+      .players()
+      .filter((candidate) => candidate !== this.player)
+      .filter((candidate) => this.player.canRequestProtection(candidate))
+      .filter(
+        (candidate) => this.player.relation(candidate) >= Relation.Neutral,
+      )
+      .sort(
+        (a, b) =>
+          this.game.config().maxTroops(b) -
+          this.game.config().maxTroops(a),
+      );
+
+    if (candidates.length === 0) return false;
+    return this.player.requestProtection(candidates[0]);
+  }
+
+  private isClearlyWeakerThan(other: Player): boolean {
+    const lower = (mine: number, theirs: number) =>
+      theirs > 0 && mine < theirs && mine * 100 <= theirs * 70;
+
+    let indicators = 0;
+    if (lower(this.player.troops(), other.troops())) indicators++;
+    if (
+      lower(
+        this.game.config().maxTroops(this.player),
+        this.game.config().maxTroops(other),
+      )
+    ) {
+      indicators++;
+    }
+    if (lower(this.player.numTilesOwned(), other.numTilesOwned())) indicators++;
+    return indicators >= 2;
+  }
+
   handleAllianceExtensionRequests() {
     if (this.game.config().disableAlliances()) return;
 
