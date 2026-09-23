@@ -74,6 +74,9 @@ import { UnitImpl } from "./UnitImpl";
 
 // Rot re-stamps every second, so a little slack keeps the cue from strobing.
 const DECAY_CUE_GRACE_TICKS = 30;
+const SUBJECT_TRIBUTE_INTERVAL_TICKS = 300;
+const SUBJECT_AUTONOMY_INTERVAL_TICKS = 600;
+const SUBJECT_INDEPENDENCE_AUTONOMY = 80;
 
 interface Target {
   tick: Tick;
@@ -178,6 +181,9 @@ export class PlayerImpl implements Player {
   private _subjectInfo: SubjectRelationInfo | null = null;
   private _outgoingSubjectRequests: SubjectRequestImpl[] = [];
   private _lastSubjectRequestTick = new Map<PlayerID, Tick>();
+  private _subjectLastGoldEarned: Gold = 0n;
+  private _lastSubjectEconomyTick: Tick = -1;
+  private _lastSubjectAutonomyTick: Tick = -1;
 
   private lastDeleteUnitTick: Tick = -1;
   private lastEmbargoAllTick: Tick = -1;
@@ -1190,6 +1196,9 @@ export class PlayerImpl implements Player {
     }
 
     subject._overlord = overlord;
+    subject._subjectLastGoldEarned = subject._goldEarned;
+    subject._lastSubjectEconomyTick = this.mg.ticks();
+    subject._lastSubjectAutonomyTick = this.mg.ticks();
     subject._subjectInfo =
       requestType === "protection"
         ? {
@@ -1247,15 +1256,85 @@ export class PlayerImpl implements Player {
     const subjectImpl = subject as PlayerImpl;
     subjectImpl._overlord = null;
     subjectImpl._subjectInfo = null;
+    subjectImpl._lastSubjectEconomyTick = -1;
+    subjectImpl._lastSubjectAutonomyTick = -1;
     return true;
   }
 
+  canDeclareIndependence(): boolean {
+    return (
+      this._overlord !== null &&
+      this._subjectInfo !== null &&
+      this._subjectInfo.autonomy >= SUBJECT_INDEPENDENCE_AUTONOMY
+    );
+  }
+
+  processSubjectRelationTick(): void {
+    if (this._overlord === null || this._subjectInfo === null) return;
+
+    const now = this.mg.ticks();
+    const overlord = this._overlord as PlayerImpl;
+
+    if (
+      this._lastSubjectEconomyTick < 0 ||
+      now - this._lastSubjectEconomyTick >= SUBJECT_TRIBUTE_INTERVAL_TICKS
+    ) {
+      const earnedSinceLast = this._goldEarned - this._subjectLastGoldEarned;
+      this._subjectLastGoldEarned = this._goldEarned;
+      this._lastSubjectEconomyTick = now;
+
+      if (earnedSinceLast > 0n && this._subjectInfo.tributeRate > 0) {
+        const due =
+          (earnedSinceLast * BigInt(this._subjectInfo.tributeRate)) / 100n;
+        const paid = due > this._gold ? this._gold : due;
+        if (paid > 0n) {
+          this.removeGold(paid);
+          overlord.addGold(paid);
+        }
+      }
+    }
+
+    if (
+      this._lastSubjectAutonomyTick < 0 ||
+      now - this._lastSubjectAutonomyTick >= SUBJECT_AUTONOMY_INTERVAL_TICKS
+    ) {
+      this._lastSubjectAutonomyTick = now;
+
+      const troopRatio =
+        overlord.troops() > 0 ? this.troops() / overlord.troops() : 1;
+      const tileRatio =
+        overlord.numTilesOwned() > 0
+          ? this.numTilesOwned() / overlord.numTilesOwned()
+          : 1;
+
+      let delta =
+        this._subjectInfo.kind === SubjectRelationKind.Protectorate ? 1 : 0;
+
+      if (troopRatio >= 0.9 && tileRatio >= 0.9) {
+        delta += 2;
+      } else if (troopRatio >= 0.6 || tileRatio >= 0.6) {
+        delta += 1;
+      }
+
+      if (troopRatio <= 0.3 && tileRatio <= 0.3) {
+        delta -= 1;
+      }
+
+      this._subjectInfo.autonomy = Math.max(
+        0,
+        Math.min(100, this._subjectInfo.autonomy + delta),
+      );
+    }
+  }
+
   declareIndependence(): boolean {
-    if (this._overlord === null) return false;
+    if (!this.canDeclareIndependence() || this._overlord === null) return false;
     const overlord = this._overlord as PlayerImpl;
     overlord._subjects = overlord._subjects.filter((p) => p !== this);
     this._overlord = null;
     this._subjectInfo = null;
+    this._lastSubjectEconomyTick = -1;
+    this._lastSubjectAutonomyTick = -1;
     this.updateRelation(overlord, -100);
     overlord.updateRelation(this, -100);
     return true;
