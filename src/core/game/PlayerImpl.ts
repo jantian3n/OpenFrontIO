@@ -960,6 +960,7 @@ export class PlayerImpl implements Player {
     if (this.isDisconnected() || other.isDisconnected()) return false;
     if (this.isPuppet() || other.isPuppet()) return false;
     if (this.isOverlordOf(other) || this.isAlliedWith(other)) return false;
+    if (other.isRequestingPuppetOf(this)) return false;
     return !this._outgoingPuppetRequests.includes(other);
   }
 
@@ -976,9 +977,9 @@ export class PlayerImpl implements Player {
     if (!requestor.isRequestingPuppetOf(this) || requestor.isPuppet()) {
       return false;
     }
-    (requestor as PlayerImpl)._outgoingPuppetRequests = (
-      requestor as PlayerImpl
-    )._outgoingPuppetRequests.filter((p) => p !== this);
+    // Once subjugated neither side should keep stale demands open.
+    (requestor as PlayerImpl)._outgoingPuppetRequests = [];
+    this._outgoingPuppetRequests = [];
 
     this.removeAllAlliances();
     requestor.removeAllAlliances();
