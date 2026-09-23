@@ -865,7 +865,11 @@
     "unit_destroyed": "你的 {unit} 已被摧毁",
     "no_boats_available": "无可用船，最多 {max} 个",
     "events": "事件",
-    "received_gold_from_trade": "与 {name} 贸易获得了 {gold} 黄金"
+    "received_gold_from_trade": "与 {name} 贸易获得了 {gold} 黄金",
+    "request_independence": "{name} 要求独立。",
+    "independence_request_sent": "已向 {name} 提交独立请求。",
+    "independence_request_accepted": "{name} 已同意你的独立请求。",
+    "independence_request_rejected": "{name} 拒绝了你的独立请求。"
   },
   "player_type": {
     "player": "玩家",
@@ -902,7 +906,7 @@
     "reject_subject_request": "拒绝",
     "release_subject": "解除从属关系",
     "declare_independence": "宣布独立",
-    "independence_requires_autonomy": "自主度达到80%后可独立",
+    "independence_requires_autonomy": "自主度80%可要求独立，100%可和平独立",
     "overlord": "宗主国",
     "subjects": "附属国",
     "subject_status": "从属状态",
@@ -920,7 +924,8 @@
     "kick_confirm": "要踢掉 {name} 吗？\n\n他无法再重新加入此游戏。",
     "arc_up": "向上的弧",
     "arc_down": "向下的弧",
-    "flip_rocket_trajectory": "翻转火箭轨道"
+    "flip_rocket_trajectory": "翻转火箭轨道",
+    "request_independence": "要求独立"
   },
   "kick_reason": {
     "duplicate_session": "已被踢出游戏（也可能你正在另一个标签页上玩游戏）",
