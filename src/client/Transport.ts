@@ -69,15 +69,17 @@ export class SendBreakAllianceIntentEvent implements GameEvent {
   ) {}
 }
 
-export class SendPuppetIntentEvent implements GameEvent {
+export class SendSubjectIntentEvent implements GameEvent {
   constructor(
     public readonly action:
-      | "request"
+      | "request_protection"
+      | "demand_subjugation"
       | "accept"
       | "reject"
       | "release"
       | "independence",
     public readonly target?: PlayerView,
+    public readonly requestType?: "protection" | "subjugation",
   ) {}
 }
 
@@ -304,7 +306,7 @@ export class Transport {
     this.subscribe(SendBreakAllianceIntentEvent, (e) =>
       this.onBreakAllianceRequestUIEvent(e),
     );
-    this.subscribe(SendPuppetIntentEvent, (e) => this.onSendPuppetIntent(e));
+    this.subscribe(SendSubjectIntentEvent, (e) => this.onSendSubjectIntent(e));
     this.subscribe(SendSpawnIntentEvent, (e) => this.onSendSpawnIntentEvent(e));
     this.subscribe(SendAttackIntentEvent, (e) => this.onSendAttackIntent(e));
     this.subscribe(SendUpgradeStructureIntentEvent, (e) =>
@@ -746,11 +748,12 @@ export class Transport {
     });
   }
 
-  private onSendPuppetIntent(event: SendPuppetIntentEvent) {
+  private onSendSubjectIntent(event: SendSubjectIntentEvent) {
     this.sendIntent({
-      type: "puppet",
+      type: "subject",
       action: event.action,
       target: event.target?.id(),
+      requestType: event.requestType,
     });
   }
 
