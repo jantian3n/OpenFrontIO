@@ -642,6 +642,15 @@ export class WarshipExecution implements Execution {
       const targetUnit = this.warship.targetUnit()!;
       const attacker = this.warship.owner();
       const defender = targetUnit.owner();
+
+      // A target can become friendly after the warship locked on (alliance,
+      // protectorate, puppet, same-team transition). Never keep firing a stale
+      // hostile target after diplomacy changes.
+      if (attacker !== defender && !attacker.canAttackPlayer(defender, true)) {
+        this.warship.setTargetUnit(undefined);
+        return;
+      }
+
       if (attacker !== defender) {
         attacker.registerHostileActionAgainst(defender);
         defender.raiseProtectionCall(attacker);
