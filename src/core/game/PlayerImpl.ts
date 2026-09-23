@@ -1285,6 +1285,10 @@ export class PlayerImpl implements Player {
     this.cancelDirectNukesBetween(subject, overlord);
 
     if (subject._subjectInfo.kind === SubjectRelationKind.Puppet) {
+      // Puppets do not conduct an independent alliance policy. Any existing
+      // third-party alliances end when the puppet relationship is formed,
+      // and pending requests are rejected.
+      subject.removeAllAlliances();
       this.mg.rejectAllianceRequestsInvolving(subject);
     }
 
@@ -1728,11 +1732,36 @@ export class PlayerImpl implements Player {
     });
   }
 
+  private puppetMayFight(other: Player): boolean {
+    if (!this.isPuppet()) return true;
+
+    const defensiveWar =
+      other.hasRecentAggressionAgainst(this) ||
+      this.incomingAttacks().some(
+        (attack) => attack.isActive() && attack.attacker() === other,
+      );
+    if (defensiveWar) return true;
+
+    const overlord = this._overlord;
+    if (overlord === null || !overlord.isAlive()) return false;
+
+    const overlordDesignatedEnemy =
+      overlord.targets().includes(other) ||
+      overlord.outgoingAttacks().some(
+        (attack) => attack.isActive() && attack.target() === other,
+      );
+
+    return overlordDesignatedEnemy;
+  }
+
   canTarget(other: Player): boolean {
     if (this === other) {
       return false;
     }
     if (this.isFriendly(other)) {
+      return false;
+    }
+    if (!this.puppetMayFight(other)) {
       return false;
     }
     for (const t of this.targets_) {
@@ -2690,11 +2719,17 @@ export class PlayerImpl implements Player {
     player: Player,
     treatAFKFriendly: boolean = false,
   ): boolean {
+    if (this.isFriendly(player, treatAFKFriendly)) {
+      return false;
+    }
+    if (!this.puppetMayFight(player)) {
+      return false;
+    }
     if (this.type() !== PlayerType.Human) {
       // Only human attackers respect PVP immunity
-      return !this.isFriendly(player, treatAFKFriendly);
+      return true;
     }
-    return !player.isImmune() && !this.isFriendly(player, treatAFKFriendly);
+    return !player.isImmune();
   }
 
   public canAttack(tile: TileRef): boolean {
