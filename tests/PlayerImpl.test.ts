@@ -247,14 +247,85 @@ describe("PlayerImpl", () => {
       expect(other.subjectInfo()).toBeNull();
     });
 
-    test("subject can declare independence", () => {
+    test("subject needs sufficient autonomy to declare independence", () => {
       makePlayerDominant();
       expect(other.requestProtection(player)).toBe(true);
       expect(player.acceptSubjectRequest(other, "protection")).toBe(true);
+
+      expect(other.subjectInfo()?.autonomy).toBe(60);
+      expect(other.canDeclareIndependence()).toBe(false);
+      expect(other.declareIndependence()).toBe(false);
+
+      // Model the end of a successful autonomy buildup without coupling this
+      // focused lifecycle test to hundreds of simulation ticks.
+      (other as any)._subjectInfo.autonomy = 80;
+
+      expect(other.canDeclareIndependence()).toBe(true);
       expect(other.declareIndependence()).toBe(true);
       expect(other.isSubject()).toBe(false);
       expect(player.isOverlordOf(other)).toBe(false);
       expect(other.isFriendly(player)).toBe(false);
+    });
+
+    test("protectorate pays tribute on newly earned gold", () => {
+      makePlayerDominant();
+      expect(other.requestProtection(player)).toBe(true);
+      expect(player.acceptSubjectRequest(other, "protection")).toBe(true);
+
+      const overlordGold = player.gold();
+      const subjectGold = other.gold();
+
+      other.addGold(1_000n);
+      (game as any)._ticks += 300;
+      other.processSubjectRelationTick();
+
+      expect(player.gold() - overlordGold).toBe(100n);
+      expect(other.gold() - subjectGold).toBe(900n);
+    });
+
+    test("declining a protection call raises subject autonomy", () => {
+      makePlayerDominant();
+      expect(other.requestProtection(player)).toBe(true);
+      expect(player.acceptSubjectRequest(other, "protection")).toBe(true);
+
+      const attackerInfo = new PlayerInfo(
+        "attacker",
+        PlayerType.Human,
+        null,
+        "attacker_id",
+      );
+      game.addPlayer(attackerInfo);
+      const attacker = game.player("attacker_id");
+      attacker.conquer(game.ref(40, 40));
+
+      expect(other.raiseProtectionCall(attacker)).toBe(true);
+      expect(player.incomingProtectionCalls()).toHaveLength(1);
+      expect(player.respondToProtectionCall(other, attacker, false)).toBe(true);
+      expect(player.incomingProtectionCalls()).toHaveLength(0);
+      expect(other.subjectInfo()?.autonomy).toBe(70);
+    });
+
+    test("intervening against an attacker marks it as hostile and targeted", () => {
+      makePlayerDominant();
+      expect(other.requestProtection(player)).toBe(true);
+      expect(player.acceptSubjectRequest(other, "protection")).toBe(true);
+
+      const attackerInfo = new PlayerInfo(
+        "attacker",
+        PlayerType.Human,
+        null,
+        "attacker_id",
+      );
+      game.addPlayer(attackerInfo);
+      const attacker = game.player("attacker_id");
+      attacker.conquer(game.ref(40, 40));
+
+      expect(other.raiseProtectionCall(attacker)).toBe(true);
+      expect(player.respondToProtectionCall(other, attacker, true)).toBe(true);
+
+      expect(player.relation(attacker)).toBe(Relation.Hostile);
+      expect(player.targets()).toContain(attacker);
+      expect(other.subjectInfo()?.autonomy).toBe(58);
     });
 
     test("reciprocal subject requests are blocked while one is pending", () => {
