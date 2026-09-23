@@ -252,9 +252,10 @@ export class PlayerPanel extends LitElement implements Controller {
       | "accept"
       | "reject"
       | "release"
+      | "request_independence"
       | "independence",
     target?: PlayerView,
-    requestType?: "protection" | "subjugation",
+    requestType?: "protection" | "subjugation" | "independence",
   ) {
     e.stopPropagation();
     this.eventBus.emit(
