@@ -77,9 +77,12 @@ export class SendSubjectIntentEvent implements GameEvent {
       | "accept"
       | "reject"
       | "release"
-      | "independence",
+      | "independence"
+      | "intervene"
+      | "decline_protection_call",
     public readonly target?: PlayerView,
     public readonly requestType?: "protection" | "subjugation",
+    public readonly subject?: PlayerView,
   ) {}
 }
 
@@ -753,6 +756,7 @@ export class Transport {
       type: "subject",
       action: event.action,
       target: event.target?.id(),
+      subject: event.subject?.id(),
       requestType: event.requestType,
     });
   }
