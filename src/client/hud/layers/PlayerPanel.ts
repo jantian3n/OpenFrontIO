@@ -926,6 +926,7 @@ export class PlayerPanel extends LitElement implements Controller {
     const canTarget = this.actions?.interaction?.canTarget;
     const canEmbargo = this.actions?.interaction?.canEmbargo;
     const isSubjectRelation = my.isInSubjectRelation(other);
+    const isMyOverlord = my.isSubjectOf(other);
 
     return html`
       <div class="flex flex-col gap-2.5">
@@ -1111,7 +1112,21 @@ export class PlayerPanel extends LitElement implements Controller {
                       label: translateText("player_panel.declare_independence"),
                       type: "red",
                     })
-                  : ""}
+                  : isMyOverlord
+                    ? actionButton({
+                        onClick: () => {},
+                        icon: breakAllianceIcon,
+                        iconAlt: "Declare Independence",
+                        title: translateText(
+                          "player_panel.independence_requires_autonomy",
+                        ),
+                        label: translateText(
+                          "player_panel.independence_requires_autonomy",
+                        ),
+                        type: "red",
+                        disabled: true,
+                      })
+                    : ""}
               </div>
             `}
         ${other === my
