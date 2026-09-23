@@ -26,6 +26,7 @@ import {
   PlayerReportedEvent,
   SendAllianceRequestIntentEvent,
   SendBreakAllianceIntentEvent,
+  SendPuppetIntentEvent,
   SendEmbargoAllIntentEvent,
   SendEmbargoIntentEvent,
   SendEmojiIntentEvent,
@@ -240,6 +241,16 @@ export class PlayerPanel extends LitElement implements Controller {
   ) {
     e.stopPropagation();
     this.eventBus.emit(new SendBreakAllianceIntentEvent(myPlayer, other));
+    this.hide();
+  }
+
+  private handlePuppetAction(
+    e: Event,
+    action: "request" | "accept" | "reject" | "release" | "independence",
+    target?: PlayerView,
+  ) {
+    e.stopPropagation();
+    this.eventBus.emit(new SendPuppetIntentEvent(action, target));
     this.hide();
   }
 
@@ -800,6 +811,37 @@ export class PlayerPanel extends LitElement implements Controller {
     `;
   }
 
+  private renderPuppetRelations(other: PlayerView) {
+    const overlord = other.overlord();
+    const subjects = other.subjects();
+    if (overlord === null && subjects.length === 0) return html``;
+
+    return html`
+      <div class="select-none mt-2 space-y-2">
+        ${overlord !== null
+          ? html`<div class="grid grid-cols-[auto_1fr] gap-x-6 text-base">
+              <div class="font-semibold text-zinc-300">
+                ${translateText("player_panel.overlord")}
+              </div>
+              <div class="text-right font-semibold text-amber-300">
+                ${overlord.displayName()}
+              </div>
+            </div>`
+          : ""}
+        ${subjects.length > 0
+          ? html`<div class="grid grid-cols-[auto_1fr] gap-x-6 text-base">
+              <div class="font-semibold text-zinc-300">
+                ${translateText("player_panel.subjects")}
+              </div>
+              <div class="text-right font-semibold text-zinc-100">
+                ${subjects.map((p) => p.displayName()).join(", ")}
+              </div>
+            </div>`
+          : ""}
+      </div>
+    `;
+  }
+
   private renderAllianceExpiry() {
     if (this.allianceExpiryText === null) return html``;
     return html`
@@ -830,6 +872,15 @@ export class PlayerPanel extends LitElement implements Controller {
         ? this.actions?.canSendEmojiAllPlayers
         : this.actions?.interaction?.canSendEmoji;
     const canBreakAlliance = this.actions?.interaction?.canBreakAlliance;
+    const canSendPuppetRequest =
+      this.actions?.interaction?.canSendPuppetRequest;
+    const canAcceptPuppetRequest =
+      this.actions?.interaction?.canAcceptPuppetRequest;
+    const canRejectPuppetRequest =
+      this.actions?.interaction?.canRejectPuppetRequest;
+    const canReleasePuppet = this.actions?.interaction?.canReleasePuppet;
+    const canDeclareIndependence =
+      this.actions?.interaction?.canDeclareIndependence;
     const canTarget = this.actions?.interaction?.canTarget;
     const canEmbargo = this.actions?.interaction?.canEmbargo;
 
@@ -930,6 +981,61 @@ export class PlayerPanel extends LitElement implements Controller {
                       title: translateText("player_panel.send_alliance"),
                       label: translateText("player_panel.send_alliance"),
                       type: "indigo",
+                    })
+                  : ""}
+                ${canSendPuppetRequest
+                  ? actionButton({
+                      onClick: (e: MouseEvent) =>
+                        this.handlePuppetAction(e, "request", other),
+                      icon: shieldIcon,
+                      iconAlt: "Demand Subjugation",
+                      title: translateText("player_panel.demand_subjugation"),
+                      label: translateText("player_panel.demand_subjugation"),
+                      type: "yellow",
+                    })
+                  : ""}
+                ${canAcceptPuppetRequest
+                  ? actionButton({
+                      onClick: (e: MouseEvent) =>
+                        this.handlePuppetAction(e, "accept", other),
+                      icon: shieldIcon,
+                      iconAlt: "Accept Subjugation",
+                      title: translateText("player_panel.accept_subjugation"),
+                      label: translateText("player_panel.accept_subjugation"),
+                      type: "green",
+                    })
+                  : ""}
+                ${canRejectPuppetRequest
+                  ? actionButton({
+                      onClick: (e: MouseEvent) =>
+                        this.handlePuppetAction(e, "reject", other),
+                      icon: breakAllianceIcon,
+                      iconAlt: "Reject Subjugation",
+                      title: translateText("player_panel.reject_subjugation"),
+                      label: translateText("player_panel.reject_subjugation"),
+                      type: "red",
+                    })
+                  : ""}
+                ${canReleasePuppet
+                  ? actionButton({
+                      onClick: (e: MouseEvent) =>
+                        this.handlePuppetAction(e, "release", other),
+                      icon: shieldIcon,
+                      iconAlt: "Release Subject",
+                      title: translateText("player_panel.release_subject"),
+                      label: translateText("player_panel.release_subject"),
+                      type: "yellow",
+                    })
+                  : ""}
+                ${canDeclareIndependence
+                  ? actionButton({
+                      onClick: (e: MouseEvent) =>
+                        this.handlePuppetAction(e, "independence"),
+                      icon: breakAllianceIcon,
+                      iconAlt: "Declare Independence",
+                      title: translateText("player_panel.declare_independence"),
+                      label: translateText("player_panel.declare_independence"),
+                      type: "red",
                     })
                   : ""}
               </div>
@@ -1126,6 +1232,7 @@ export class PlayerPanel extends LitElement implements Controller {
 
                     <!-- Alliances list -->
                     ${this.renderAlliances(other)}
+                    ${this.renderPuppetRelations(other)}
 
                     <!-- Alliance time remaining -->
                     ${this.renderAllianceExpiry()}
