@@ -253,6 +253,12 @@ export interface PlayerUpdate {
   goldEarned?: Gold;
   troops?: number;
   allies?: number[];
+  /** Direct overlord smallID, or null when sovereign. */
+  overlord?: number | null;
+  /** Direct subject smallIDs controlled by this player. */
+  subjects?: number[];
+  /** Player IDs currently asked to become this player's subject. */
+  outgoingPuppetRequests?: PlayerID[];
   embargoes?: Set<PlayerID>;
   isTraitor?: boolean;
   traitorRemainingTicks?: number;
