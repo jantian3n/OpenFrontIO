@@ -974,7 +974,12 @@ export class PlayerImpl implements Player {
   }
 
   acceptPuppetRequest(requestor: Player): boolean {
-    if (this._overlord !== null || !this.isAlive() || !requestor.isAlive()) {
+    if (
+      this._overlord !== null ||
+      this._subjects.length > 0 ||
+      !this.isAlive() ||
+      !requestor.isAlive()
+    ) {
       return false;
     }
     if (!requestor.isRequestingPuppetOf(this) || requestor.isPuppet()) {
