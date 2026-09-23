@@ -918,6 +918,8 @@ export class PlayerPanel extends LitElement implements Controller {
       this.actions?.interaction?.canRequestProtection;
     const canDemandSubjugation =
       this.actions?.interaction?.canDemandSubjugation;
+    const canRequestIndependence =
+      this.actions?.interaction?.canRequestIndependence;
     const pendingSubjectRequest =
       this.actions?.interaction?.pendingSubjectRequest;
     const canReleaseSubject = this.actions?.interaction?.canReleaseSubject;
@@ -1112,21 +1114,39 @@ export class PlayerPanel extends LitElement implements Controller {
                       label: translateText("player_panel.declare_independence"),
                       type: "red",
                     })
-                  : isMyOverlord
+                  : canRequestIndependence
                     ? actionButton({
-                        onClick: () => {},
+                        onClick: (e: MouseEvent) =>
+                          this.handleSubjectAction(
+                            e,
+                            "request_independence",
+                            other,
+                          ),
                         icon: breakAllianceIcon,
-                        iconAlt: "Declare Independence",
+                        iconAlt: "Request Independence",
                         title: translateText(
-                          "player_panel.independence_requires_autonomy",
+                          "player_panel.request_independence",
                         ),
                         label: translateText(
-                          "player_panel.independence_requires_autonomy",
+                          "player_panel.request_independence",
                         ),
-                        type: "red",
-                        disabled: true,
+                        type: "yellow",
                       })
-                    : ""}
+                    : isMyOverlord
+                      ? actionButton({
+                          onClick: () => {},
+                          icon: breakAllianceIcon,
+                          iconAlt: "Request Independence",
+                          title: translateText(
+                            "player_panel.independence_requires_autonomy",
+                          ),
+                          label: translateText(
+                            "player_panel.independence_requires_autonomy",
+                          ),
+                          type: "red",
+                          disabled: true,
+                        })
+                      : ""}
               </div>
             `}
         ${other === my
