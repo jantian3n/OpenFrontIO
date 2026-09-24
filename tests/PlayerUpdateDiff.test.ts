@@ -252,18 +252,18 @@ describe("Player update diffing (toUpdate)", () => {
       alice.conquer(game.ref(x, 30));
     }
 
-    expect(bob.requestProtection(alice)).toBe(true);
+    expect(bob.requestPuppet(alice)).toBe(true);
     let bobDiff = bob.toUpdate();
     expect(bobDiff).not.toBeNull();
     expect(bobDiff!.outgoingSubjectRequests).toEqual([
       {
         recipientID: "alice_id",
-        requestType: "protection",
+        requestType: "subjugation",
         createdAt: game.ticks(),
       },
     ]);
 
-    expect(alice.acceptSubjectRequest(bob, "protection")).toBe(true);
+    expect(alice.acceptSubjectRequest(bob, "subjugation")).toBe(true);
 
     const aliceDiff = alice.toUpdate();
     expect(aliceDiff).not.toBeNull();
@@ -272,10 +272,10 @@ describe("Player update diffing (toUpdate)", () => {
     bobDiff = bob.toUpdate();
     expect(bobDiff).not.toBeNull();
     expect(bobDiff!.overlord).toBe(alice.smallID());
-    expect(bobDiff!.subjectKind).toBe("protectorate");
-    expect(bobDiff!.subjectOrigin).toBe("protection");
-    expect(bobDiff!.autonomy).toBe(60);
-    expect(bobDiff!.tributeRate).toBe(10);
+    expect(bobDiff!.subjectKind).toBe("puppet");
+    expect(bobDiff!.subjectOrigin).toBe("subjugation");
+    expect(bobDiff!.autonomy).toBe(40);
+    expect(bobDiff!.tributeRate).toBe(20);
     expect(bobDiff!.outgoingSubjectRequests).toEqual([]);
   });
 

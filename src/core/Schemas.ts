@@ -669,6 +669,8 @@ export const SubjectIntentSchema = z.object({
   ]),
   target: MappedID.optional(),
   subject: MappedID.optional(),
+  // Kept for replay compatibility. SubjectExecution maps `protection` to
+  // the active puppet request before it reaches the relation model.
   requestType: z.enum(["protection", "subjugation", "independence"]).optional(),
 });
 

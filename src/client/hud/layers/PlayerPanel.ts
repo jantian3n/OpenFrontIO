@@ -247,7 +247,6 @@ export class PlayerPanel extends LitElement implements Controller {
   private handleSubjectAction(
     e: Event,
     action:
-      | "request_protection"
       | "demand_subjugation"
       | "accept"
       | "reject"
@@ -255,7 +254,7 @@ export class PlayerPanel extends LitElement implements Controller {
       | "request_independence"
       | "independence",
     target?: PlayerView,
-    requestType?: "protection" | "subjugation" | "independence",
+    requestType?: "subjugation" | "independence",
   ) {
     e.stopPropagation();
     this.eventBus.emit(
@@ -826,9 +825,7 @@ export class PlayerPanel extends LitElement implements Controller {
     const subjects = other.subjects();
     if (overlord === null && subjects.length === 0) return html``;
 
-    const relationLabel = other.isProtectorate()
-      ? translateText("player_panel.protectorate")
-      : translateText("player_panel.puppet");
+    const relationLabel = translateText("player_panel.puppet");
 
     return html`
       <div class="select-none mt-2 space-y-2">
@@ -871,11 +868,7 @@ export class PlayerPanel extends LitElement implements Controller {
                 ${subjects
                   .map(
                     (p) =>
-                      `${p.displayName()} (${
-                        p.isProtectorate()
-                          ? translateText("player_panel.protectorate")
-                          : translateText("player_panel.puppet")
-                      })`,
+                      `${p.displayName()} (${translateText("player_panel.puppet")})`,
                   )
                   .join(", ")}
               </div>
@@ -915,8 +908,6 @@ export class PlayerPanel extends LitElement implements Controller {
         ? this.actions?.canSendEmojiAllPlayers
         : this.actions?.interaction?.canSendEmoji;
     const canBreakAlliance = this.actions?.interaction?.canBreakAlliance;
-    const canRequestProtection =
-      this.actions?.interaction?.canRequestProtection;
     const canDemandSubjugation =
       this.actions?.interaction?.canDemandSubjugation;
     const canRequestIndependence =
@@ -1029,21 +1020,6 @@ export class PlayerPanel extends LitElement implements Controller {
                       iconAlt: "Alliance",
                       title: translateText("player_panel.send_alliance"),
                       label: translateText("player_panel.send_alliance"),
-                      type: "indigo",
-                    })
-                  : ""}
-                ${canRequestProtection
-                  ? actionButton({
-                      onClick: (e: MouseEvent) =>
-                        this.handleSubjectAction(
-                          e,
-                          "request_protection",
-                          other,
-                        ),
-                      icon: shieldIcon,
-                      iconAlt: "Seek Protection",
-                      title: translateText("player_panel.seek_protection"),
-                      label: translateText("player_panel.seek_protection"),
                       type: "indigo",
                     })
                   : ""}

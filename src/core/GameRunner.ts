@@ -268,7 +268,7 @@ export class GameRunner {
         canTarget: player.canTarget(other),
         canSendAllianceRequest: player.canSendAllianceRequest(other),
         canBreakAlliance: player.isAlliedWith(other),
-        canRequestProtection: player.canRequestProtection(other),
+        canRequestPuppet: player.canRequestPuppet(other),
         canDemandSubjugation: player.canDemandSubjugation(other),
         canRequestIndependence: player.canRequestIndependence(other),
         pendingSubjectRequest,

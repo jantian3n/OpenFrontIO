@@ -101,13 +101,25 @@ function stateFromUpdate(pu: PlayerUpdate): PlayerState {
     allies: pu.allies!.slice(),
     overlord: pu.overlord ?? null,
     subjects: pu.subjects?.slice() ?? [],
-    subjectKind: pu.subjectKind ?? null,
-    subjectOrigin: pu.subjectOrigin ?? null,
+    subjectKind:
+      pu.subjectKind === "protectorate"
+        ? SubjectRelationKind.Puppet
+        : (pu.subjectKind ?? null),
+    subjectOrigin:
+      pu.subjectOrigin === "protection"
+        ? "subjugation"
+        : (pu.subjectOrigin ?? null),
     subjectCreatedAt: pu.subjectCreatedAt ?? null,
     autonomy: pu.autonomy ?? null,
     tributeRate: pu.tributeRate ?? null,
     outgoingSubjectRequests:
-      pu.outgoingSubjectRequests?.map((request) => ({ ...request })) ?? [],
+      pu.outgoingSubjectRequests?.map((request) => ({
+        ...request,
+        requestType:
+          request.requestType === "protection"
+            ? "subjugation"
+            : request.requestType,
+      })) ?? [],
     embargoes: [],
     targets: pu.targets!.slice(),
     outgoingAttacks: pu.outgoingAttacks!,
@@ -598,13 +610,6 @@ export class PlayerView {
 
   isSubject(): boolean {
     return (this.state.overlord ?? null) !== null;
-  }
-
-  isProtectorate(): boolean {
-    return (
-      this.isSubject() &&
-      this.state.subjectKind === SubjectRelationKind.Protectorate
-    );
   }
 
   isPuppet(): boolean {

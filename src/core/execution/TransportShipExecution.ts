@@ -149,10 +149,6 @@ export class TransportShipExecution implements Execution {
       targetTile: this.dst,
     });
 
-    if (this.target.isPlayer()) {
-      (this.target as Player).raiseProtectionCall(this.attacker);
-    }
-
     const fullPath = this.pathFinder.findPath(this.src, this.dst) ?? [this.src];
     if (fullPath.length === 0 || fullPath[0] !== this.src) {
       fullPath.unshift(this.src);

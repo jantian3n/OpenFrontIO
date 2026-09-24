@@ -1,5 +1,6 @@
 import type { PlayerState } from "../../client/render/types";
-import type { EmojiMessage } from "./Game";
+import { SubjectRelationKind } from "./Game";
+import type { EmojiMessage, SubjectFormationType, SubjectRequestType } from "./Game";
 import {
   AllianceView,
   AttackUpdate,
@@ -7,6 +8,33 @@ import {
   PlayerUpdate,
   SubjectRequestView,
 } from "./GameUpdates";
+
+function normalizeSubjectKind(
+  kind: PlayerUpdate["subjectKind"],
+): SubjectRelationKind | null | undefined {
+  return kind === "protectorate" ? SubjectRelationKind.Puppet : kind;
+}
+
+function normalizeSubjectOrigin(
+  origin: PlayerUpdate["subjectOrigin"],
+): SubjectFormationType | null | undefined {
+  return origin === "protection" ? "subjugation" : origin;
+}
+
+function normalizeSubjectRequestType(
+  requestType: SubjectRequestView["requestType"],
+): SubjectRequestType {
+  return requestType === "protection" ? "subjugation" : requestType;
+}
+
+function normalizeSubjectRequests(
+  requests: PlayerUpdate["outgoingSubjectRequests"],
+): PlayerUpdate["outgoingSubjectRequests"] {
+  return requests?.map((request) => ({
+    ...request,
+    requestType: normalizeSubjectRequestType(request.requestType),
+  }));
+}
 
 /**
  * Build a partial PlayerUpdate containing only fields whose value differs
@@ -32,6 +60,16 @@ export function diffPlayerUpdate(
   prev: PlayerUpdate,
   next: PlayerUpdate,
 ): PlayerUpdate | null {
+  const prevSubjectKind = normalizeSubjectKind(prev.subjectKind);
+  const nextSubjectKind = normalizeSubjectKind(next.subjectKind);
+  const prevSubjectOrigin = normalizeSubjectOrigin(prev.subjectOrigin);
+  const nextSubjectOrigin = normalizeSubjectOrigin(next.subjectOrigin);
+  const prevSubjectRequests = normalizeSubjectRequests(
+    prev.outgoingSubjectRequests,
+  );
+  const nextSubjectRequests = normalizeSubjectRequests(
+    next.outgoingSubjectRequests,
+  );
   // Fast path: this runs for every player every tick and usually finds no
   // changes (tilesOwned/gold/troops travel separately) — return without
   // allocating anything. The comparisons repeat below only for the rare
@@ -63,8 +101,8 @@ export function diffPlayerUpdate(
     prev.lastDeleteUnitTick === next.lastDeleteUnitTick &&
     prev.isLobbyCreator === next.isLobbyCreator &&
     prev.overlord === next.overlord &&
-    prev.subjectKind === next.subjectKind &&
-    prev.subjectOrigin === next.subjectOrigin &&
+    prevSubjectKind === nextSubjectKind &&
+    prevSubjectOrigin === nextSubjectOrigin &&
     prev.subjectCreatedAt === next.subjectCreatedAt &&
     prev.autonomy === next.autonomy &&
     prev.tributeRate === next.tributeRate &&
@@ -72,8 +110,8 @@ export function diffPlayerUpdate(
     numberArrayEqual(prev.subjects, next.subjects) &&
     numberArrayEqual(prev.targets, next.targets) &&
     subjectRequestArrayEqual(
-      prev.outgoingSubjectRequests,
-      next.outgoingSubjectRequests,
+      prevSubjectRequests,
+      nextSubjectRequests,
     ) &&
     stringArrayEqual(
       prev.outgoingAllianceRequests,
@@ -141,8 +179,14 @@ export function diffPlayerUpdate(
   );
   setIfDifferent("isLobbyCreator", prev.isLobbyCreator === next.isLobbyCreator);
   setIfDifferent("overlord", prev.overlord === next.overlord);
-  setIfDifferent("subjectKind", prev.subjectKind === next.subjectKind);
-  setIfDifferent("subjectOrigin", prev.subjectOrigin === next.subjectOrigin);
+  if (prevSubjectKind !== nextSubjectKind) {
+    diff.subjectKind = nextSubjectKind;
+    changed = true;
+  }
+  if (prevSubjectOrigin !== nextSubjectOrigin) {
+    diff.subjectOrigin = nextSubjectOrigin;
+    changed = true;
+  }
   setIfDifferent(
     "subjectCreatedAt",
     prev.subjectCreatedAt === next.subjectCreatedAt,
@@ -155,10 +199,13 @@ export function diffPlayerUpdate(
   setIfDifferent(
     "outgoingSubjectRequests",
     subjectRequestArrayEqual(
-      prev.outgoingSubjectRequests,
-      next.outgoingSubjectRequests,
+      prevSubjectRequests,
+      nextSubjectRequests,
     ),
   );
+  if (diff.outgoingSubjectRequests !== undefined) {
+    diff.outgoingSubjectRequests = nextSubjectRequests;
+  }
   setIfDifferent(
     "outgoingAllianceRequests",
     stringArrayEqual(
@@ -233,8 +280,12 @@ export function applyStateUpdate(target: PlayerState, pu: PlayerUpdate): void {
   if (pu.allies !== undefined) target.allies = pu.allies.slice();
   if (pu.overlord !== undefined) target.overlord = pu.overlord;
   if (pu.subjects !== undefined) target.subjects = pu.subjects.slice();
-  if (pu.subjectKind !== undefined) target.subjectKind = pu.subjectKind;
-  if (pu.subjectOrigin !== undefined) target.subjectOrigin = pu.subjectOrigin;
+  if (pu.subjectKind !== undefined) {
+    target.subjectKind = normalizeSubjectKind(pu.subjectKind);
+  }
+  if (pu.subjectOrigin !== undefined) {
+    target.subjectOrigin = normalizeSubjectOrigin(pu.subjectOrigin);
+  }
   if (pu.subjectCreatedAt !== undefined)
     target.subjectCreatedAt = pu.subjectCreatedAt;
   if (pu.autonomy !== undefined) target.autonomy = pu.autonomy;
@@ -242,6 +293,7 @@ export function applyStateUpdate(target: PlayerState, pu: PlayerUpdate): void {
   if (pu.outgoingSubjectRequests !== undefined) {
     target.outgoingSubjectRequests = pu.outgoingSubjectRequests.map((request) => ({
       ...request,
+      requestType: normalizeSubjectRequestType(request.requestType),
     }));
   }
   if (pu.targets !== undefined) target.targets = pu.targets.slice();

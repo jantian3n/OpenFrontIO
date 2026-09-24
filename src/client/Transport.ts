@@ -72,20 +72,14 @@ export class SendBreakAllianceIntentEvent implements GameEvent {
 export class SendSubjectIntentEvent implements GameEvent {
   constructor(
     public readonly action:
-      | "request_protection"
       | "demand_subjugation"
       | "accept"
       | "reject"
       | "release"
       | "request_independence"
-      | "independence"
-      | "intervene"
-      | "decline_protection_call",
-    public readonly target?: PlayerView,
-    public readonly requestType?:
-      | "protection"
-      | "subjugation"
       | "independence",
+    public readonly target?: PlayerView,
+    public readonly requestType?: "subjugation" | "independence",
     public readonly subject?: PlayerView,
   ) {}
 }

@@ -423,12 +423,16 @@ export interface Alliance {
 }
 
 export enum SubjectRelationKind {
-  Protectorate = "protectorate",
   Puppet = "puppet",
 }
 
-export type SubjectFormationType = "protection" | "subjugation";
+export type SubjectFormationType = "subjugation";
 export type SubjectRequestType = SubjectFormationType | "independence";
+export type LegacySubjectRelationKind = "protectorate";
+export type LegacySubjectFormationType = "protection";
+export type SubjectIntentRequestType =
+  | SubjectRequestType
+  | LegacySubjectFormationType;
 
 export interface SubjectRelationInfo {
   kind: SubjectRelationKind;
@@ -442,12 +446,6 @@ export interface SubjectRequest {
   requestor(): Player;
   recipient(): Player;
   requestType(): SubjectRequestType;
-  createdAt(): Tick;
-}
-
-export interface ProtectionCall {
-  subject(): Player;
-  attacker(): Player;
   createdAt(): Tick;
 }
 
@@ -755,7 +753,6 @@ export interface Player {
   subjects(): Player[];
   subjectInfo(): SubjectRelationInfo | null;
   isSubject(): boolean;
-  isProtectorate(): boolean;
   isPuppet(): boolean;
   isSubjectOf(other: Player): boolean;
   isPuppetOf(other: Player): boolean;
@@ -768,10 +765,10 @@ export interface Player {
     other: Player,
     requestType?: SubjectRequestType,
   ): boolean;
-  canRequestProtection(other: Player): boolean;
+  canRequestPuppet(other: Player): boolean;
   canDemandSubjugation(other: Player): boolean;
   canRequestIndependence(other: Player): boolean;
-  requestProtection(other: Player): boolean;
+  requestPuppet(other: Player): boolean;
   /** Applies puppet terms already ratified by a signed peace proposal. */
   formPuppetFromPeace(overlord: Player): boolean;
   demandSubjugation(other: Player): boolean;
@@ -785,13 +782,6 @@ export interface Player {
     requestType: SubjectRequestType,
   ): boolean;
   releaseSubject(subject: Player): boolean;
-  incomingProtectionCalls(): ProtectionCall[];
-  raiseProtectionCall(attacker: Player): boolean;
-  respondToProtectionCall(
-    subject: Player,
-    attacker: Player,
-    intervene: boolean,
-  ): boolean;
   canDeclareIndependence(): boolean;
   declareIndependence(): boolean;
   processSubjectRelationTick(): void;
@@ -1095,7 +1085,7 @@ export interface PlayerInteraction {
   canSendEmoji: boolean;
   canSendAllianceRequest: boolean;
   canBreakAlliance: boolean;
-  canRequestProtection: boolean;
+  canRequestPuppet: boolean;
   canDemandSubjugation: boolean;
   canRequestIndependence: boolean;
   pendingSubjectRequest?: SubjectRequestType;

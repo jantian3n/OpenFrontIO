@@ -33,7 +33,6 @@ import {
   PlayerInfo,
   PlayerProfile,
   PlayerType,
-  ProtectionCall,
   Relation,
   Structures,
   SubjectRelationInfo,
@@ -88,34 +87,11 @@ class Donation {
   ) {}
 }
 
-class ProtectionCallRecord implements ProtectionCall {
-  constructor(
-    private readonly subject_: Player,
-    private readonly attacker_: Player,
-    private readonly createdAt_: Tick,
-  ) {}
-
-  subject(): Player {
-    return this.subject_;
-  }
-
-  attacker(): Player {
-    return this.attacker_;
-  }
-
-  createdAt(): Tick {
-    return this.createdAt_;
-  }
-}
-
 const SUBJECT_TRIBUTE_INTERVAL_TICKS = 300;
 const SUBJECT_AUTONOMY_INTERVAL_TICKS = 600;
 const SUBJECT_INDEPENDENCE_REQUEST_AUTONOMY = 80;
 const SUBJECT_PEACEFUL_INDEPENDENCE_AUTONOMY = 100;
-const SUBJECT_PROTECTION_OUTCOME_COOLDOWN_TICKS = 300;
-// A state that starts a conflict cannot immediately turn the opponent's
-// retaliation into a protection claim. Active attacks extend this implicitly.
-const PROTECTION_AGGRESSION_MEMORY_TICKS = 600;
+const HOSTILE_ACTION_MEMORY_TICKS = 600;
 
 // Shared singletons for empty collections in toFullUpdate. Sharing
 // references lets diffPlayerUpdate's `a === b` fast paths skip structural
@@ -208,10 +184,7 @@ export class PlayerImpl implements Player {
   private _subjectInfo: SubjectRelationInfo | null = null;
   private _outgoingSubjectRequests: SubjectRequestImpl[] = [];
   private _lastSubjectRequestTick = new Map<PlayerID, Tick>();
-  private _pendingProtectionCalls: ProtectionCallRecord[] = [];
-  private _lastProtectionCallTick = new Map<string, Tick>();
   private _lastAggressionTick = new Map<PlayerID, Tick>();
-  private _lastProtectionOutcomeTick: Tick = -1;
   private _subjectLastGoldEarned: Gold = 0n;
   private _lastSubjectEconomyTick: Tick = -1;
   private _lastSubjectAutonomyTick: Tick = -1;
@@ -994,13 +967,6 @@ export class PlayerImpl implements Player {
     return this._overlord !== null;
   }
 
-  isProtectorate(): boolean {
-    return (
-      this._overlord !== null &&
-      this._subjectInfo?.kind === SubjectRelationKind.Protectorate
-    );
-  }
-
   isPuppet(): boolean {
     return (
       this._overlord !== null &&
@@ -1128,7 +1094,7 @@ export class PlayerImpl implements Player {
     );
   }
 
-  canRequestProtection(other: Player): boolean {
+  canRequestPuppet(other: Player): boolean {
     if (!this.canFormSubjectRelation(this, other, true)) return false;
     if (!this.subjectRequestCooldownPassed(other)) return false;
     return !this.hasPendingSubjectRequestWith(other);
@@ -1154,13 +1120,14 @@ export class PlayerImpl implements Player {
   private createSubjectRequest(
     other: Player,
     requestType: SubjectRequestType,
+    asPuppetApplicant = false,
   ): boolean {
     const allowed =
-      requestType === "protection"
-        ? this.canRequestProtection(other)
-        : requestType === "subjugation"
-          ? this.canDemandSubjugation(other)
-          : this.canRequestIndependence(other);
+      requestType === "subjugation"
+        ? asPuppetApplicant
+          ? this.canRequestPuppet(other)
+          : this.canDemandSubjugation(other)
+        : this.canRequestIndependence(other);
     if (!allowed) return false;
 
     const request = new SubjectRequestImpl(
@@ -1175,8 +1142,8 @@ export class PlayerImpl implements Player {
     return true;
   }
 
-  requestProtection(other: Player): boolean {
-    return this.createSubjectRequest(other, "protection");
+  requestPuppet(other: Player): boolean {
+    return this.createSubjectRequest(other, "subjugation", true);
   }
 
   formPuppetFromPeace(overlord: Player): boolean {
@@ -1287,20 +1254,19 @@ export class PlayerImpl implements Player {
       return true;
     }
 
-    const subject = (
-      requestType === "protection" ? requestor : this
-    ) as PlayerImpl;
-    const overlord = (
-      requestType === "protection" ? this : requestor
-    ) as PlayerImpl;
+    // Subjugation requests have two orientations: a weaker player may ask a
+    // stronger player to become a puppet, while a stronger player may demand
+    // subjugation. Determine the orientation from the same deterministic
+    // eligibility checks used when each request is created.
+    const applicantRequest = this.canFormSubjectRelation(
+      requestor,
+      this,
+      true,
+    );
+    const subject = (applicantRequest ? requestor : this) as PlayerImpl;
+    const overlord = (applicantRequest ? this : requestor) as PlayerImpl;
 
-    if (
-      !this.canFormSubjectRelation(
-        subject,
-        overlord,
-        requestType === "protection",
-      )
-    ) {
+    if (!applicantRequest && !this.canFormSubjectRelation(this, requestor, false)) {
       return false;
     }
 
@@ -1311,27 +1277,13 @@ export class PlayerImpl implements Player {
       accepted: true,
     });
 
-    // If protection is granted while the applicant is already under attack,
-    // the guarantee applies immediately to those existing defensive wars.
-    if (requestType === "protection") {
-      const currentAttackers = new Set<Player>();
-      for (const attack of subject.incomingAttacks()) {
-        if (!attack.isActive()) continue;
-        const attacker = attack.attacker();
-        if (attacker !== overlord) currentAttackers.add(attacker);
-      }
-      for (const attacker of currentAttackers) {
-        subject.raiseProtectionCall(attacker);
-      }
-    }
-
     return true;
   }
 
   private applySubjectRelation(
     subject: PlayerImpl,
     overlord: PlayerImpl,
-    requestType: "protection" | "subjugation",
+    requestType: "subjugation",
   ): void {
     const directAlliance = subject.allianceWith(overlord);
     if (directAlliance !== null) {
@@ -1342,23 +1294,13 @@ export class PlayerImpl implements Player {
     subject._subjectLastGoldEarned = subject._goldEarned;
     subject._lastSubjectEconomyTick = this.mg.ticks();
     subject._lastSubjectAutonomyTick = this.mg.ticks();
-    subject._lastProtectionOutcomeTick = -1;
-    subject._subjectInfo =
-      requestType === "protection"
-        ? {
-            kind: SubjectRelationKind.Protectorate,
-            origin: "protection",
-            createdAt: this.mg.ticks(),
-            autonomy: 60,
-            tributeRate: 10,
-          }
-        : {
-            kind: SubjectRelationKind.Puppet,
-            origin: "subjugation",
-            createdAt: this.mg.ticks(),
-            autonomy: 40,
-            tributeRate: 20,
-          };
+    subject._subjectInfo = {
+      kind: SubjectRelationKind.Puppet,
+      origin: "subjugation",
+      createdAt: this.mg.ticks(),
+      autonomy: 40,
+      tributeRate: 20,
+    };
 
     if (!overlord._subjects.includes(subject)) {
       overlord._subjects.push(subject);
@@ -1368,13 +1310,11 @@ export class PlayerImpl implements Player {
     // strategic weapons need explicit neutralization because they keep flying.
     this.cancelDirectNukesBetween(subject, overlord);
 
-    if (subject._subjectInfo.kind === SubjectRelationKind.Puppet) {
-      // Puppets do not conduct an independent alliance policy. Any existing
-      // third-party alliances end when the puppet relationship is formed,
-      // and pending requests are rejected.
-      subject.removeAllAlliances();
-      this.mg.rejectAllianceRequestsInvolving(subject);
-    }
+    // Puppets do not conduct an independent alliance policy. Any existing
+    // third-party alliances end when the puppet relationship is formed, and
+    // pending requests are rejected.
+    subject.removeAllAlliances();
+    this.mg.rejectAllianceRequestsInvolving(subject);
 
     this.clearSubjectRequestsInvolving(subject, overlord);
     subject._lastSubjectRequestTick.delete(overlord.id());
@@ -1399,256 +1339,14 @@ export class PlayerImpl implements Player {
     return true;
   }
 
-  private cancelProtectionCallsForSubject(subject: Player): void {
-    const remaining: ProtectionCallRecord[] = [];
-
-    for (const call of this._pendingProtectionCalls) {
-      if (call.subject() !== subject) {
-        remaining.push(call);
-        continue;
-      }
-
-      this.mg.addUpdate({
-        type: GameUpdateType.ProtectionCallReply,
-        call: {
-          type: GameUpdateType.ProtectionCall,
-          overlordID: this.smallID(),
-          subjectID: subject.smallID(),
-          attackerID: call.attacker().smallID(),
-          createdAt: call.createdAt(),
-        },
-        intervened: false,
-        cancelled: true,
-      });
-    }
-
-    this._pendingProtectionCalls = remaining;
-  }
-
   releaseSubject(subject: Player): boolean {
     if (!this.isOverlordOf(subject)) return false;
-    this.cancelProtectionCallsForSubject(subject);
-    this._subjects = this._subjects.filter((p) => p !== subject);
+    this._subjects = this._subjects.filter((player) => player !== subject);
     const subjectImpl = subject as PlayerImpl;
     subjectImpl._overlord = null;
     subjectImpl._subjectInfo = null;
     subjectImpl._lastSubjectEconomyTick = -1;
     subjectImpl._lastSubjectAutonomyTick = -1;
-    subjectImpl._lastProtectionOutcomeTick = -1;
-    return true;
-  }
-
-  private protectionCallKey(subject: Player, attacker: Player): string {
-    return `${subject.id()}|${attacker.id()}`;
-  }
-
-  private canApplyProtectionOutcome(subject: PlayerImpl): boolean {
-    return (
-      subject._lastProtectionOutcomeTick < 0 ||
-      this.mg.ticks() - subject._lastProtectionOutcomeTick >=
-        SUBJECT_PROTECTION_OUTCOME_COOLDOWN_TICKS
-    );
-  }
-
-  private applyProtectionDecline(subject: PlayerImpl): void {
-    if (subject._subjectInfo === null) return;
-    if (!this.canApplyProtectionOutcome(subject)) return;
-
-    subject._lastProtectionOutcomeTick = this.mg.ticks();
-    const autonomyGain =
-      subject._subjectInfo.kind === SubjectRelationKind.Protectorate ? 10 : 5;
-    const relationLoss =
-      subject._subjectInfo.kind === SubjectRelationKind.Protectorate
-        ? -25
-        : -15;
-
-    subject._subjectInfo.autonomy = Math.min(
-      100,
-      subject._subjectInfo.autonomy + autonomyGain,
-    );
-    subject.updateRelation(this, relationLoss);
-  }
-
-  private applyProtectionHonor(subject: PlayerImpl): void {
-    if (subject._subjectInfo === null) return;
-    if (!this.canApplyProtectionOutcome(subject)) return;
-
-    subject._lastProtectionOutcomeTick = this.mg.ticks();
-    subject._subjectInfo.autonomy = Math.max(
-      0,
-      subject._subjectInfo.autonomy - 2,
-    );
-    subject.updateRelation(this, 10);
-  }
-
-  private expireProtectionCalls(): void {
-    const duration = this.mg.config().allianceRequestDuration();
-    const active: ProtectionCallRecord[] = [];
-
-    for (const call of this._pendingProtectionCalls) {
-      const subject = call.subject() as PlayerImpl;
-      const attacker = call.attacker();
-      const noLongerValid =
-        !subject.isSubjectOf(this) ||
-        !subject.isAlive() ||
-        !attacker.isAlive() ||
-        subject.isFriendly(attacker);
-
-      if (noLongerValid) {
-        this.mg.addUpdate({
-          type: GameUpdateType.ProtectionCallReply,
-          call: {
-            type: GameUpdateType.ProtectionCall,
-            overlordID: this.smallID(),
-            subjectID: subject.smallID(),
-            attackerID: attacker.smallID(),
-            createdAt: call.createdAt(),
-          },
-          intervened: false,
-          cancelled: true,
-        });
-        continue;
-      }
-
-      if (this.mg.ticks() - call.createdAt() < duration) {
-        active.push(call);
-        continue;
-      }
-
-      this.applyProtectionDecline(subject);
-
-      this.mg.addUpdate({
-        type: GameUpdateType.ProtectionCallReply,
-        call: {
-          type: GameUpdateType.ProtectionCall,
-          overlordID: this.smallID(),
-          subjectID: subject.smallID(),
-          attackerID: attacker.smallID(),
-          createdAt: call.createdAt(),
-        },
-        intervened: false,
-      });
-    }
-
-    this._pendingProtectionCalls = active;
-  }
-
-  incomingProtectionCalls(): ProtectionCall[] {
-    this.expireProtectionCalls();
-    return [...this._pendingProtectionCalls];
-  }
-
-  raiseProtectionCall(attacker: Player): boolean {
-    if (
-      this._overlord === null ||
-      this._subjectInfo === null ||
-      !this.isAlive() ||
-      !attacker.isAlive() ||
-      attacker === this ||
-      attacker === this._overlord
-    ) {
-      return false;
-    }
-
-    // Protection is defensive. A subject that initiated this conflict cannot
-    // invoke its overlord merely because the victim fights back.
-    const stillAttacking = this.outgoingAttacks().some(
-      (attack) =>
-        attack.isActive() &&
-        attack.target().isPlayer() &&
-        attack.target() === attacker,
-    );
-    if (stillAttacking || this.hasRecentAggressionAgainst(attacker)) {
-      return false;
-    }
-
-    const overlord = this._overlord as PlayerImpl;
-    overlord.expireProtectionCalls();
-
-    const key = overlord.protectionCallKey(this, attacker);
-    const last = overlord._lastProtectionCallTick.get(key);
-    if (
-      last !== undefined &&
-      this.mg.ticks() - last < this.mg.config().allianceRequestDuration()
-    ) {
-      return false;
-    }
-
-    const call = new ProtectionCallRecord(this, attacker, this.mg.ticks());
-    overlord._pendingProtectionCalls.push(call);
-    overlord._lastProtectionCallTick.set(key, this.mg.ticks());
-    this.mg.addUpdate({
-      type: GameUpdateType.ProtectionCall,
-      overlordID: overlord.smallID(),
-      subjectID: this.smallID(),
-      attackerID: attacker.smallID(),
-      createdAt: call.createdAt(),
-    });
-    return true;
-  }
-
-  respondToProtectionCall(
-    subject: Player,
-    attacker: Player,
-    intervene: boolean,
-  ): boolean {
-    this.expireProtectionCalls();
-    const callIndex = this._pendingProtectionCalls.findIndex(
-      (call) => call.subject() === subject && call.attacker() === attacker,
-    );
-    if (callIndex < 0 || !subject.isSubjectOf(this)) return false;
-
-    if (intervene && this.isOnSameTeam(attacker)) {
-      return false;
-    }
-
-    const [call] = this._pendingProtectionCalls.splice(callIndex, 1);
-    const subjectImpl = subject as PlayerImpl;
-
-    if (!attacker.isAlive() || subject.isFriendly(attacker)) {
-      this.mg.addUpdate({
-        type: GameUpdateType.ProtectionCallReply,
-        call: {
-          type: GameUpdateType.ProtectionCall,
-          overlordID: this.smallID(),
-          subjectID: subject.smallID(),
-          attackerID: attacker.smallID(),
-          createdAt: call.createdAt(),
-        },
-        intervened: false,
-        cancelled: true,
-      });
-      return true;
-    }
-
-    if (intervene) {
-      const alliance = this.allianceWith(attacker);
-      if (alliance !== null) {
-        this.breakAlliance(alliance);
-      }
-
-      this.updateRelation(attacker, -100);
-      attacker.updateRelation(this, -70);
-      if (this.canTarget(attacker)) {
-        this.target(attacker);
-      }
-
-      this.applyProtectionHonor(subjectImpl);
-    } else {
-      this.applyProtectionDecline(subjectImpl);
-    }
-
-    this.mg.addUpdate({
-      type: GameUpdateType.ProtectionCallReply,
-      call: {
-        type: GameUpdateType.ProtectionCall,
-        overlordID: this.smallID(),
-        subjectID: subject.smallID(),
-        attackerID: attacker.smallID(),
-        createdAt: call.createdAt(),
-      },
-      intervened: intervene,
-    });
     return true;
   }
 
@@ -1661,10 +1359,6 @@ export class PlayerImpl implements Player {
   }
 
   processSubjectRelationTick(): void {
-    // Overlords must resolve ignored protection calls too; expiration counts
-    // as refusing the obligation and therefore raises subject autonomy.
-    this.expireProtectionCalls();
-
     if (this._overlord === null || this._subjectInfo === null) return;
 
     const now = this.mg.ticks();
@@ -1702,8 +1396,7 @@ export class PlayerImpl implements Player {
           ? this.numTilesOwned() / overlord.numTilesOwned()
           : 1;
 
-      let delta =
-        this._subjectInfo.kind === SubjectRelationKind.Protectorate ? 1 : 0;
+      let delta = 0;
 
       if (troopRatio >= 0.9 && tileRatio >= 0.9) {
         delta += 2;
@@ -2760,7 +2453,7 @@ export class PlayerImpl implements Player {
     const tick = this._lastAggressionTick.get(player.id());
     return (
       tick !== undefined &&
-      this.mg.ticks() - tick < PROTECTION_AGGRESSION_MEMORY_TICKS
+      this.mg.ticks() - tick < HOSTILE_ACTION_MEMORY_TICKS
     );
   }
 

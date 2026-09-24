@@ -13,7 +13,6 @@ import {
   DonateEventUpdate,
   EmojiUpdate,
   GameUpdateType,
-  ProtectionCallReplyUpdate,
   SubjectRequestReplyUpdate,
   TargetPlayerUpdate,
   UnitIncomingUpdate,
@@ -61,7 +60,6 @@ const TIER_1_TYPES: ReadonlySet<MessageType> = new Set([
   MessageType.ALLIANCE_BROKEN,
   MessageType.RENEW_ALLIANCE,
   MessageType.SUBJECT_REQUEST,
-  MessageType.PROTECTION_CALL,
   MessageType.CONQUERED_PLAYER,
   MessageType.CHAT,
   MessageType.DONATION_RECEIVED,
@@ -148,10 +146,6 @@ export class EventsDisplay extends LitElement implements Controller {
       GameUpdateType.SubjectRequestReply,
       this.onSubjectRequestReplyEvent.bind(this),
     ],
-    [
-      GameUpdateType.ProtectionCallReply,
-      this.onProtectionCallReplyEvent.bind(this),
-    ],
   ] as const;
 
   constructor() {
@@ -174,7 +168,6 @@ export class EventsDisplay extends LitElement implements Controller {
     const myPlayer = this.game.myPlayer();
     if (!myPlayer || !e.target) return;
     if (
-      e.action !== "request_protection" &&
       e.action !== "demand_subjugation" &&
       e.action !== "request_independence"
     ) {
@@ -182,17 +175,13 @@ export class EventsDisplay extends LitElement implements Controller {
     }
 
     const description =
-      e.action === "request_protection"
-        ? translateText("events_display.protection_request_sent", {
+      e.action === "demand_subjugation"
+        ? translateText("events_display.subjugation_demand_sent", {
             name: e.target.displayName(),
           })
-        : e.action === "demand_subjugation"
-          ? translateText("events_display.subjugation_demand_sent", {
-              name: e.target.displayName(),
-            })
-          : translateText("events_display.independence_request_sent", {
-              name: e.target.displayName(),
-            });
+        : translateText("events_display.independence_request_sent", {
+            name: e.target.displayName(),
+          });
 
     this.addEvent({
       description,
@@ -449,15 +438,7 @@ export class EventsDisplay extends LitElement implements Controller {
       update.request.recipientID,
     ) as PlayerView;
     let description: string;
-    if (update.request.requestType === "protection") {
-      description = update.accepted
-        ? translateText("events_display.protection_request_accepted", {
-            name: other.displayName(),
-          })
-        : translateText("events_display.protection_request_rejected", {
-            name: other.displayName(),
-          });
-    } else if (update.request.requestType === "subjugation") {
+    if (update.request.requestType === "subjugation") {
       description = update.accepted
         ? translateText("events_display.subjugation_demand_accepted", {
             name: other.displayName(),
@@ -481,35 +462,6 @@ export class EventsDisplay extends LitElement implements Controller {
       highlight: true,
       createdAt: this.game.ticks(),
       focusID: other.smallID(),
-    });
-  }
-
-  private onProtectionCallReplyEvent(update: ProtectionCallReplyUpdate) {
-    const myPlayer = this.game.myPlayer();
-    if (!myPlayer || update.call.subjectID !== myPlayer.smallID()) return;
-    if (update.cancelled) return;
-
-    const overlord = this.game.playerBySmallID(
-      update.call.overlordID,
-    ) as PlayerView;
-    const attacker = this.game.playerBySmallID(
-      update.call.attackerID,
-    ) as PlayerView;
-
-    this.addEvent({
-      description: update.intervened
-        ? translateText("events_display.protection_intervened", {
-            overlord: overlord.displayName(),
-            attacker: attacker.displayName(),
-          })
-        : translateText("events_display.protection_declined", {
-            overlord: overlord.displayName(),
-            attacker: attacker.displayName(),
-          }),
-      type: MessageType.PROTECTION_CALL,
-      highlight: true,
-      createdAt: this.game.ticks(),
-      focusID: overlord.smallID(),
     });
   }
 

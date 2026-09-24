@@ -13,7 +13,7 @@ import {
   EmojiMessage,
   PlayerType,
 } from "../../../src/core/game/Game";
-import { GameUpdateType } from "../../../src/core/game/GameUpdates";
+import { GameUpdateType, PlayerUpdate } from "../../../src/core/game/GameUpdates";
 import { UserSettings } from "../../../src/core/game/UserSettings";
 import {
   makeEmptyGu,
@@ -24,6 +24,33 @@ import {
 } from "../../util/viewStubs";
 
 describe("PlayerView accessors", () => {
+  it("normalizes legacy protectorate updates into puppet state", () => {
+    const player = makePlayerView({
+      data: {
+        overlord: 3,
+        subjectKind: "protectorate" as PlayerUpdate["subjectKind"],
+        subjectOrigin: "protection" as PlayerUpdate["subjectOrigin"],
+        outgoingSubjectRequests: [
+          {
+            recipientID: "player-b",
+            requestType: "protection" as "subjugation",
+            createdAt: 12,
+          },
+        ],
+      },
+    });
+
+    expect(player.subjectKind()).toBe("puppet");
+    expect(player.subjectOrigin()).toBe("subjugation");
+    expect(player.state.outgoingSubjectRequests).toEqual([
+      {
+        recipientID: "player-b",
+        requestType: "subjugation",
+        createdAt: 12,
+      },
+    ]);
+  });
+
   it("forwards data fields", () => {
     const p = makePlayerView({
       data: {

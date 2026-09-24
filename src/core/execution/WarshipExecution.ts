@@ -644,7 +644,7 @@ export class WarshipExecution implements Execution {
       const defender = targetUnit.owner();
 
       // A target can become friendly after the warship locked on (alliance,
-      // protectorate, puppet, same-team transition). Never keep firing a stale
+      // puppet, same-team transition). Never keep firing a stale
       // hostile target after diplomacy changes.
       if (attacker !== defender && !attacker.canAttackPlayer(defender, true)) {
         this.warship.setTargetUnit(undefined);
@@ -660,7 +660,6 @@ export class WarshipExecution implements Execution {
           return;
         }
         attacker.registerHostileActionAgainst(defender);
-        defender.raiseProtectionCall(attacker);
         this.mg.addExecution(
           new ShellExecution(
             this.warship.tile(),

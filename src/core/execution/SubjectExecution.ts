@@ -3,7 +3,7 @@ import {
   Game,
   Player,
   PlayerID,
-  SubjectRequestType,
+  SubjectIntentRequestType,
 } from "../game/Game";
 
 export type SubjectAction =
@@ -26,7 +26,7 @@ export class SubjectExecution implements Execution {
     private readonly player: Player,
     private readonly action: SubjectAction,
     private readonly targetID?: PlayerID,
-    private readonly requestType?: SubjectRequestType,
+    private readonly requestType?: SubjectIntentRequestType,
     private readonly subjectID?: PlayerID,
   ) {}
 
@@ -64,24 +64,35 @@ export class SubjectExecution implements Execution {
     let success = false;
     switch (this.action) {
       case "request_protection":
-        success =
-          this.target !== null && this.player.requestProtection(this.target);
+        success = this.target !== null && this.player.requestPuppet(this.target);
         break;
       case "demand_subjugation":
         success =
           this.target !== null && this.player.demandSubjugation(this.target);
         break;
       case "accept":
+        {
+          const requestType =
+            this.requestType === "protection"
+              ? "subjugation"
+              : this.requestType;
         success =
           this.target !== null &&
-          this.requestType !== undefined &&
-          this.player.acceptSubjectRequest(this.target, this.requestType);
+            requestType !== undefined &&
+            this.player.acceptSubjectRequest(this.target, requestType);
+        }
         break;
       case "reject":
+        {
+          const requestType =
+            this.requestType === "protection"
+              ? "subjugation"
+              : this.requestType;
         success =
           this.target !== null &&
-          this.requestType !== undefined &&
-          this.player.rejectSubjectRequest(this.target, this.requestType);
+            requestType !== undefined &&
+            this.player.rejectSubjectRequest(this.target, requestType);
+        }
         break;
       case "release":
         success =
@@ -95,24 +106,10 @@ export class SubjectExecution implements Execution {
         success = this.player.declareIndependence();
         break;
       case "intervene":
-        success =
-          this.target !== null &&
-          this.subject !== null &&
-          this.player.respondToProtectionCall(
-            this.subject,
-            this.target,
-            true,
-          );
-        break;
       case "decline_protection_call":
-        success =
-          this.target !== null &&
-          this.subject !== null &&
-          this.player.respondToProtectionCall(
-            this.subject,
-            this.target,
-            false,
-          );
+        // These turns remain readable so old histories can advance, but
+        // protection-call mechanics no longer exist in the active game.
+        success = true;
         break;
     }
 

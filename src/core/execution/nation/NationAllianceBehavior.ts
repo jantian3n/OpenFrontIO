@@ -46,52 +46,21 @@ export class NationAllianceBehavior {
     }
   }
 
-  handleProtectionCalls() {
-    for (const call of this.player.incomingProtectionCalls()) {
-      const subject = call.subject();
-      const attacker = call.attacker();
-
-      // Nation overlords are deliberately conservative: a protection pact
-      // creates a defense obligation, but it should not automatically turn
-      // every alliance dispute into a chain war.
-      const canPoliticallyIntervene =
-        !this.player.isOnSameTeam(attacker) &&
-        !this.player.isAlliedWith(attacker) &&
-        this.player.relation(attacker) < Relation.Friendly;
-
-      const strongEnough =
-        this.player.troops() >= attacker.troops() * 0.8 ||
-        this.game.config().maxTroops(this.player) >=
-          this.game.config().maxTroops(attacker) * 0.8 ||
-        this.player.numTilesOwned() >= attacker.numTilesOwned();
-
-      const intervene =
-        canPoliticallyIntervene &&
-        strongEnough &&
-        (subject.isProtectorate() ||
-          this.player.relation(subject) >= Relation.Neutral);
-
-      this.player.respondToProtectionCall(subject, attacker, intervene);
-    }
-  }
-
   handleSubjectRequests() {
     for (const request of this.player.incomingSubjectRequests()) {
       const requestor = request.requestor();
 
-      if (request.requestType() === "protection") {
+      if (request.requestType() === "independence") {
         const acceptable =
           !requestor.isTraitor() &&
-          this.player.relation(requestor) >= Relation.Neutral &&
-          this.player.subjects().length < 4;
-
+          this.player.relation(requestor) >= Relation.Neutral;
         if (
           acceptable &&
-          this.player.acceptSubjectRequest(requestor, "protection")
+          this.player.acceptSubjectRequest(requestor, "independence")
         ) {
           break;
         }
-        this.player.rejectSubjectRequest(requestor, "protection");
+        this.player.rejectSubjectRequest(requestor, "independence");
         continue;
       }
 
@@ -113,40 +82,6 @@ export class NationAllianceBehavior {
       }
       this.player.rejectSubjectRequest(requestor, "subjugation");
     }
-  }
-
-  maybeSeekProtection(borderingEnemies: Player[]): boolean {
-    if (
-      this.player.isSubject() ||
-      this.player.subjects().length > 0 ||
-      this.player.outgoingSubjectRequests().length > 0
-    ) {
-      return false;
-    }
-
-    const underSeriousThreat = borderingEnemies.some((enemy) =>
-      this.isClearlyWeakerThan(enemy),
-    );
-    if (!underSeriousThreat || !this.random.chance(6)) {
-      return false;
-    }
-
-    const candidates = this.game
-      .players()
-      .filter((candidate) => candidate !== this.player)
-      .filter((candidate) => candidate.type() !== PlayerType.Bot)
-      .filter((candidate) => this.player.canRequestProtection(candidate))
-      .filter(
-        (candidate) => this.player.relation(candidate) >= Relation.Neutral,
-      )
-      .sort(
-        (a, b) =>
-          this.game.config().maxTroops(b) -
-          this.game.config().maxTroops(a),
-      );
-
-    if (candidates.length === 0) return false;
-    return this.player.requestProtection(candidates[0]);
   }
 
   private isClearlyWeakerThan(other: Player): boolean {

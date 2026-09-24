@@ -155,8 +155,8 @@ describe("diffPlayerUpdate", () => {
     const prev = makePlayerUpdate();
     const next = makePlayerUpdate({
       overlord: 7,
-      subjectKind: SubjectRelationKind.Protectorate,
-      subjectOrigin: "protection",
+      subjectKind: "protectorate" as PlayerUpdate["subjectKind"],
+      subjectOrigin: "protection" as PlayerUpdate["subjectOrigin"],
       subjectCreatedAt: 123,
       autonomy: 60,
       tributeRate: 10,
@@ -171,25 +171,25 @@ describe("diffPlayerUpdate", () => {
 
     const diff = diffPlayerUpdate(prev, next)!;
     expect(diff.overlord).toBe(7);
-    expect(diff.subjectKind).toBe("protectorate");
-    expect(diff.subjectOrigin).toBe("protection");
+    expect(diff.subjectKind).toBe(SubjectRelationKind.Puppet);
+    expect(diff.subjectOrigin).toBe("subjugation");
     expect(diff.subjectCreatedAt).toBe(123);
     expect(diff.autonomy).toBe(60);
     expect(diff.tributeRate).toBe(10);
-    expect(diff.outgoingSubjectRequests).toEqual(
-      next.outgoingSubjectRequests,
-    );
+    expect(diff.outgoingSubjectRequests).toEqual([
+      { recipientID: "player-b", requestType: "subjugation", createdAt: 123 },
+    ]);
 
     const state = makePlayerState();
     applyStateUpdate(state, diff);
     expect(state.overlord).toBe(7);
-    expect(state.subjectKind).toBe("protectorate");
-    expect(state.subjectOrigin).toBe("protection");
+    expect(state.subjectKind).toBe(SubjectRelationKind.Puppet);
+    expect(state.subjectOrigin).toBe("subjugation");
     expect(state.autonomy).toBe(60);
     expect(state.tributeRate).toBe(10);
-    expect(state.outgoingSubjectRequests).toEqual(
-      next.outgoingSubjectRequests,
-    );
+    expect(state.outgoingSubjectRequests).toEqual([
+      { recipientID: "player-b", requestType: "subjugation", createdAt: 123 },
+    ]);
     expect(state.outgoingSubjectRequests).not.toBe(
       next.outgoingSubjectRequests,
     );

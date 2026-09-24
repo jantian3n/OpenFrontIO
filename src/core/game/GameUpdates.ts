@@ -9,6 +9,8 @@ import {
   PlayerID,
   PlayerType,
   SamLauncherState,
+  LegacySubjectFormationType,
+  LegacySubjectRelationKind,
   SubjectRelationKind,
   SubjectRequestType,
   Team,
@@ -111,6 +113,7 @@ export enum GameUpdateType {
   DonateEvent,
   SubjectRequest,
   SubjectRequestReply,
+  /** Reserved values keep older worker update ordinals stable. */
   ProtectionCall,
   ProtectionCallReply,
   War,
@@ -142,8 +145,6 @@ export type GameUpdate =
   | DonateEventUpdate
   | SubjectRequestUpdate
   | SubjectRequestReplyUpdate
-  | ProtectionCallUpdate
-  | ProtectionCallReplyUpdate
   | WarUpdate;
 
 export interface WarUpdate {
@@ -276,8 +277,11 @@ export interface PlayerUpdate {
   /** Direct subject smallIDs controlled by this player. */
   subjects?: number[];
   /** Metadata for this player's own subject relationship, null when sovereign. */
-  subjectKind?: SubjectRelationKind | null;
-  subjectOrigin?: SubjectRequestType | null;
+  subjectKind?: SubjectRelationKind | LegacySubjectRelationKind | null;
+  subjectOrigin?:
+    | SubjectRequestType
+    | LegacySubjectFormationType
+    | null;
   subjectCreatedAt?: Tick | null;
   autonomy?: number | null;
   tributeRate?: number | null;
@@ -312,7 +316,7 @@ export interface AllianceView {
 
 export interface SubjectRequestView {
   recipientID: PlayerID;
-  requestType: SubjectRequestType;
+  requestType: SubjectRequestType | LegacySubjectFormationType;
   createdAt: Tick;
 }
 
@@ -320,7 +324,7 @@ export interface SubjectRequestUpdate {
   type: GameUpdateType.SubjectRequest;
   requestorID: number;
   recipientID: number;
-  requestType: SubjectRequestType;
+  requestType: SubjectRequestType | LegacySubjectFormationType;
   createdAt: Tick;
 }
 
@@ -328,21 +332,6 @@ export interface SubjectRequestReplyUpdate {
   type: GameUpdateType.SubjectRequestReply;
   request: SubjectRequestUpdate;
   accepted: boolean;
-}
-
-export interface ProtectionCallUpdate {
-  type: GameUpdateType.ProtectionCall;
-  overlordID: number;
-  subjectID: number;
-  attackerID: number;
-  createdAt: Tick;
-}
-
-export interface ProtectionCallReplyUpdate {
-  type: GameUpdateType.ProtectionCallReply;
-  call: ProtectionCallUpdate;
-  intervened: boolean;
-  cancelled?: boolean;
 }
 
 export interface AllianceRequestUpdate {

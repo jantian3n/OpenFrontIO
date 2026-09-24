@@ -248,7 +248,6 @@ export class NukeExecution implements Execution {
           // Ignore terra nullius
         } else {
           this.player.registerHostileActionAgainst(target);
-          target.raiseProtectionCall(this.player);
         }
 
         if (!target.isPlayer()) {
