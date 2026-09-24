@@ -39,6 +39,7 @@ export class TransportShipExecution implements Execution {
   private motionPlanDst: TileRef | null = null;
 
   private originalOwner: Player;
+  private warId: number | null = null;
 
   constructor(
     private attacker: Player,
@@ -101,14 +102,14 @@ export class TransportShipExecution implements Execution {
       return;
     }
 
-    if (this.target.isPlayer()) {
-      this.attacker.registerHostileActionAgainst(this.target as Player);
-    }
-
     this.troops ??= this.mg
       .config()
       .boatAttackAmount(this.attacker, this.target);
     this.troops = Math.min(this.troops, this.attacker.troops());
+    if (this.troops <= 0) {
+      this.active = false;
+      return;
+    }
 
     this.dst = targetTransportTile(this.mg, this.attacker, this.ref);
 
@@ -131,6 +132,17 @@ export class TransportShipExecution implements Execution {
     }
 
     this.src = src;
+
+    if (this.target.isPlayer()) {
+      this.warId = this.mg
+        .warDiplomacy()
+        .beginHostileAction(this.attacker, this.target);
+      if (this.warId === null) {
+        this.active = false;
+        return;
+      }
+      this.attacker.registerHostileActionAgainst(this.target);
+    }
 
     this.boat = this.attacker.buildUnit(UnitType.TransportShip, this.src, {
       troops: this.troops,
@@ -185,6 +197,14 @@ export class TransportShipExecution implements Execution {
     if (!this.boat.isActive()) {
       this.active = false;
       return;
+    }
+    if (
+      this.warId !== null &&
+      this.mg.warDiplomacy().isTruce(this.warId) &&
+      !this.boat.transportShipState().isRetreating
+    ) {
+      this.boat.updateTransportShipState({ isRetreating: true });
+      this.retreatDst = null;
     }
     if (ticks - this.lastMove < this.ticksPerMove) {
       return;

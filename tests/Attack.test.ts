@@ -565,9 +565,20 @@ describe("Attack immunity", () => {
       null,
       "nation_id",
     );
-    const nation = addPlayerToGame(nationInfo, game, game.ref(15, 0));
-    game.executeNextTick();
-    game.executeNextTick();
+    const availableLand: TileRef[] = [];
+    game.forEachTile((tile) => {
+      if (
+        availableLand.length === 0 &&
+        game.isLand(tile) &&
+        !game.isImpassable(tile) &&
+        !game.hasOwner(tile)
+      ) {
+        availableLand.push(tile);
+      }
+    });
+    game.addPlayer(nationInfo);
+    const nation = game.player(nationInfo.id);
+    nation.conquer(availableLand[0]);
 
     // Nation attacks playerA during PVP immunity - should succeed
     game.addExecution(new AttackExecution(null, nation, "playerA_id", null));
@@ -619,9 +630,20 @@ describe("Attack immunity", () => {
       null,
       "nation_id",
     );
-    const nation = addPlayerToGame(nationInfo, game, game.ref(15, 0));
-    game.executeNextTick();
-    game.executeNextTick();
+    const availableLand: TileRef[] = [];
+    game.forEachTile((tile) => {
+      if (
+        availableLand.length === 0 &&
+        game.isLand(tile) &&
+        !game.isImpassable(tile) &&
+        !game.hasOwner(tile)
+      ) {
+        availableLand.push(tile);
+      }
+    });
+    game.addPlayer(nationInfo);
+    const nation = game.player(nationInfo.id);
+    nation.conquer(availableLand[0]);
 
     // Create alliance between nation and playerA
     const allianceRequest = nation.createAllianceRequest(playerA);

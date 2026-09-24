@@ -27,6 +27,7 @@ export class NukeExecution implements Execution {
   private nuke: Unit | null = null;
   private tilesToDestroyCache: Set<TileRef> | undefined;
   private pathFinder: ParabolaUniversalPathFinder;
+  private warId: number | null;
 
   constructor(
     private nukeType: NukeType,
@@ -36,7 +37,10 @@ export class NukeExecution implements Execution {
     private speed: number = -1,
     private waitTicks = 0,
     private rocketDirectionUp: boolean = true,
-  ) {}
+    warId: number | null = null,
+  ) {
+    this.warId = warId;
+  }
 
   init(mg: Game, ticks: number): void {
     this.mg = mg;
@@ -189,6 +193,26 @@ export class NukeExecution implements Execution {
         console.warn(`cannot build Nuke`);
         this.active = false;
         return;
+      }
+      const currentTarget = this.mg.owner(this.dst);
+      if (
+        this.nukeType !== UnitType.MIRVWarhead &&
+        currentTarget.isPlayer() &&
+        currentTarget !== this.player &&
+        this.warId === null
+      ) {
+        if (!this.player.canAttackPlayer(currentTarget)) {
+          this.active = false;
+          return;
+        }
+        this.warId = this.mg
+          .warDiplomacy()
+          .beginHostileAction(this.player, currentTarget);
+        if (this.warId === null) {
+          this.active = false;
+          return;
+        }
+        this.player.registerHostileActionAgainst(currentTarget);
       }
       // The launch tile can be overridden by the caller (e.g. MIRV warheads
       // launch from the MIRV separation point, not a silo).
@@ -385,6 +409,44 @@ export class NukeExecution implements Execution {
     const magnitude = config.nukeMagnitudes(this.nuke.type());
     const toDestroy = this.tilesToDestroy();
 
+    // Decide conflict attribution before the explosion mutates ownership. A
+    // strike that hits a neutral country opens its own defensive war, while a
+    // strike against an original participant remains attached to its launch war.
+    const impactWarIDs = new Map<Player, number | null>();
+    const impactedPlayers = new Set<Player>();
+    const outer2 = magnitude.outer * magnitude.outer;
+    const dst = this.dst;
+    for (const tile of toDestroy) {
+      const owner = mg.owner(tile);
+      if (owner.isPlayer() && owner !== this.player) {
+        impactedPlayers.add(owner);
+      }
+    }
+    for (const unit of mg.units()) {
+      if (
+        unit.owner() !== this.player &&
+        mg.euclideanDistSquared(dst, unit.tile()) < outer2
+      ) {
+        impactedPlayers.add(unit.owner());
+      }
+    }
+    const launchWar =
+      this.warId === null ? undefined : mg.warDiplomacy().getWar(this.warId);
+    for (const impactedPlayer of impactedPlayers) {
+      const wasLaunchParticipant = launchWar?.sides.some((side) =>
+        side.participants.some(
+          (participant) => participant.playerID === impactedPlayer.id(),
+        ),
+      );
+      const impactWarId = wasLaunchParticipant
+        ? this.warId
+        : mg.warDiplomacy().beginHostileAction(this.player, impactedPlayer);
+      impactWarIDs.set(impactedPlayer, impactWarId);
+      if (impactWarId !== null) {
+        this.player.registerHostileActionAgainst(impactedPlayer);
+      }
+    }
+
     // Retrieve all impacted players and the number of tiles
     const tilesPerPlayers = new Map<Player, number>();
     for (const tile of toDestroy) {
@@ -392,6 +454,15 @@ export class NukeExecution implements Execution {
       if (owner.isPlayer()) {
         owner.relinquish(tile);
         tilesPerPlayers.set(owner, (tilesPerPlayers.get(owner) ?? 0) + 1);
+        const impactWarId = impactWarIDs.get(owner);
+        if (impactWarId !== null && impactWarId !== undefined) {
+          mg.warDiplomacy().recordTerritoryChange(
+            impactWarId,
+            tile,
+            owner,
+            mg.terraNullius(),
+          );
+        }
       }
 
       // Queue land tiles for batched water conversion
@@ -412,6 +483,7 @@ export class NukeExecution implements Execution {
         transportShipTroops.set(unit, unit.troops());
       }
       const outgoingAttacks = player.outgoingAttacks();
+      const troopsBeforeNuke = player.troops();
       const maxTroops = config.maxTroops(player);
       // nukeDeathFactor could compute the complete fallout in a single call instead
       for (let i = 0; i < numImpactedTiles; i++) {
@@ -449,10 +521,17 @@ export class NukeExecution implements Execution {
       for (const [unit, troops] of transportShipTroops) {
         unit.setTroops(troops);
       }
+      const impactWarId = impactWarIDs.get(player);
+      if (impactWarId !== null && impactWarId !== undefined) {
+        mg.warDiplomacy().recordTroopLoss(
+          impactWarId,
+          this.player,
+          player,
+          troopsBeforeNuke - player.troops(),
+        );
+      }
     }
 
-    const outer2 = magnitude.outer * magnitude.outer;
-    const dst = this.dst;
     for (const unit of mg.units()) {
       const type = unit.type();
       if (
@@ -468,7 +547,12 @@ export class NukeExecution implements Execution {
         // treatAFKFriendly matches warship targeting: a disconnected
         // teammate's or ally's units are still not kills.
         const friendly = this.player.isFriendly(unit.owner(), true);
-        unit.delete(true, friendly ? undefined : this.player);
+        const impactWarId = impactWarIDs.get(unit.owner());
+        unit.delete(
+          true,
+          friendly ? undefined : this.player,
+          impactWarId ?? this.warId ?? undefined,
+        );
       }
     }
 

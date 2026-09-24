@@ -510,7 +510,7 @@ export interface Unit {
   isMarkedForDeletion(): boolean;
   markForDeletion(): void;
   isOverdueDeletion(): boolean;
-  delete(displayMessage?: boolean, destroyer?: Player): void;
+  delete(displayMessage?: boolean, destroyer?: Player, warId?: number): void;
   tile(): TileRef;
   lastTile(): TileRef;
   move(tile: TileRef): void;
@@ -557,7 +557,7 @@ export interface Unit {
   health(): number;
   /** Effective max health, including any warship veterancy bonus. */
   maxHealth(): number;
-  modifyHealth(delta: number, attacker?: Player): void;
+  modifyHealth(delta: number, attacker?: Player, warId?: number): void;
 
   // Warship veterancy
   /** Current veterancy level from warshipState (0 for non-warships). */

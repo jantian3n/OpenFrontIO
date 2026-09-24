@@ -50,8 +50,8 @@ import { StatsImpl } from "./StatsImpl";
 import { assignTeams, resolveTeamsList } from "./TeamAssignment";
 import { TerraNulliusImpl } from "./TerraNulliusImpl";
 import { UnitGrid, UnitPredicate } from "./UnitGrid";
-import { WaterManager } from "./WaterManager";
 import { WarDiplomacy } from "./WarDiplomacy";
+import { WaterManager } from "./WaterManager";
 
 export function createGame(
   humans: PlayerInfo[],
@@ -555,6 +555,7 @@ export class GameImpl implements Game {
     for (const tile of waterChangedTiles) {
       this.recordTileUpdate(tile);
     }
+    this._warDiplomacy.flushUpdates();
     this._ticks++;
     return this.updates;
   }
@@ -798,6 +799,7 @@ export class GameImpl implements Game {
     this.updateBorders(tile);
     this._map.setFallout(tile, false);
     this.recordTileUpdate(tile);
+    this._warDiplomacy.recordTerritoryOwnerChange(tile, previousOwner, owner);
   }
 
   relinquish(tile: TileRef) {
@@ -818,6 +820,11 @@ export class GameImpl implements Game {
     this._map.setOwnerID(tile, 0);
     this.updateBorders(tile);
     this.recordTileUpdate(tile);
+    this._warDiplomacy.recordTerritoryOwnerChange(
+      tile,
+      previousOwner,
+      this.terraNullius(),
+    );
   }
 
   // Reusable neighbor buffer to avoid closures/allocation in updateBorders.

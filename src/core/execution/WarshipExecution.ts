@@ -652,18 +652,34 @@ export class WarshipExecution implements Execution {
       }
 
       if (attacker !== defender) {
+        const warId = this.mg
+          .warDiplomacy()
+          .beginHostileAction(attacker, defender);
+        if (warId === null) {
+          this.warship.setTargetUnit(undefined);
+          return;
+        }
         attacker.registerHostileActionAgainst(defender);
         defender.raiseProtectionCall(attacker);
+        this.mg.addExecution(
+          new ShellExecution(
+            this.warship.tile(),
+            attacker,
+            this.warship,
+            targetUnit,
+            warId,
+          ),
+        );
+      } else {
+        this.mg.addExecution(
+          new ShellExecution(
+            this.warship.tile(),
+            attacker,
+            this.warship,
+            targetUnit,
+          ),
+        );
       }
-
-      this.mg.addExecution(
-        new ShellExecution(
-          this.warship.tile(),
-          attacker,
-          this.warship,
-          targetUnit,
-        ),
-      );
       if (!this.warship.targetUnit()!.hasHealth()) {
         // Don't send multiple shells to target that can be oneshotted
         this.alreadySentShell.add(this.warship.targetUnit()!);

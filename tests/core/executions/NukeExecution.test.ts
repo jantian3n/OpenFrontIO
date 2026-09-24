@@ -217,7 +217,7 @@ describe("NukeExecution", () => {
     displayMessageSpy.mockRestore();
   });
 
-  test("nuke should break alliance when destroying ally's building even with few tiles", async () => {
+  test("nuke targeting an ally is blocked while the formal alliance remains", async () => {
     const req = player.createAllianceRequest(otherPlayer);
     req!.accept();
 
@@ -235,8 +235,7 @@ describe("NukeExecution", () => {
 
     expect(otherPlayer.units(UnitType.Port)).toHaveLength(1);
 
-    // Nuke targeting the ally's port - this should break alliance
-    // even though the tile count is below threshold
+    // A direct strike is not a substitute for ending the pact.
     game.addExecution(
       new NukeExecution(UnitType.AtomBomb, player, game.ref(50, 50), null),
     );
@@ -244,9 +243,10 @@ describe("NukeExecution", () => {
     game.executeNextTick(); // init
     game.executeNextTick(); // exec
 
-    // Alliance should be broken because we're destroying ally's building
-    expect(player.isTraitor()).toBe(true);
-    expect(player.isAlliedWith(otherPlayer)).toBe(false);
+    expect(player.isTraitor()).toBe(false);
+    expect(player.isAlliedWith(otherPlayer)).toBe(true);
+    expect(otherPlayer.units(UnitType.Port)).toHaveLength(1);
+    expect(game.warDiplomacy().warsFor(player)).toEqual([]);
   });
 
   test("drainNukeImpacts returns all queued tiles after detonation and empty on subsequent drain", () => {

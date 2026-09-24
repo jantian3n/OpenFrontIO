@@ -32,6 +32,7 @@ export class AttackExecution implements Execution {
   private map: GameMap;
 
   private attack: Attack | null = null;
+  private warId: number | null = null;
 
   // Cached smallIDs for integer owner comparisons in hot loops.
   private ownerSmallID: number;
@@ -82,37 +83,9 @@ export class AttackExecution implements Execution {
       return;
     }
 
-    // ALLIANCE CHECK — block attacks on friendly (ally or same team)
-    if (this.target.isPlayer()) {
-      const targetPlayer = this.target as Player;
-      if (this._owner.isFriendly(targetPlayer)) {
-        console.warn(
-          `${this._owner.displayName()} cannot attack ${targetPlayer.displayName()} because they are friendly (allied or same team)`,
-        );
-        this.active = false;
-        return;
-      }
-    }
-
-    if (this.target && this.target.isPlayer()) {
-      const targetPlayer = this.target as Player;
-      if (
-        targetPlayer.type() !== PlayerType.Bot &&
-        this._owner.type() !== PlayerType.Bot
-      ) {
-        // Don't let bots embargo since they can't trade anyway.
-        targetPlayer.addEmbargo(this._owner, true);
-        this.rejectIncomingAllianceRequests(targetPlayer);
-      }
-    }
-
     if (this.target.isPlayer() && !this._owner.canAttackPlayer(this.target)) {
       this.active = false;
       return;
-    }
-
-    if (this.target.isPlayer()) {
-      this._owner.registerHostileActionAgainst(this.target as Player);
     }
 
     this.startTroops ??= this.mg
@@ -126,6 +99,32 @@ export class AttackExecution implements Execution {
       // combined total, turning the leftover fractions into free troops.
       this.startTroops = this._owner.removeTroops(this.startTroops);
     }
+    if (this.startTroops <= 0) {
+      this.active = false;
+      return;
+    }
+
+    if (this.target.isPlayer()) {
+      const targetPlayer = this.target as Player;
+      this.warId = this.mg
+        .warDiplomacy()
+        .beginHostileAction(this._owner, targetPlayer);
+      if (this.warId === null) {
+        if (this.removeTroops) this._owner.addTroops(this.startTroops);
+        this.active = false;
+        return;
+      }
+      this._owner.registerHostileActionAgainst(targetPlayer);
+      if (
+        targetPlayer.type() !== PlayerType.Bot &&
+        this._owner.type() !== PlayerType.Bot
+      ) {
+        // Don't let bots embargo since they can't trade anyway.
+        targetPlayer.addEmbargo(this._owner, true);
+        this.rejectIncomingAllianceRequests(targetPlayer);
+      }
+    }
+
     this.attack = this._owner.createAttack(
       this.target,
       this.startTroops,
@@ -219,6 +218,11 @@ export class AttackExecution implements Execution {
     }
 
     const deaths = this.attack.troops() * (malusPercent / 100);
+    if (deaths > 0 && this.warId !== null && this.target.isPlayer()) {
+      this.mg
+        .warDiplomacy()
+        .recordTroopLoss(this.warId, this.target, this._owner, deaths);
+    }
     if (deaths) {
       this.mg.displayMessage(
         "events_display.attack_cancelled_retreat",
@@ -270,6 +274,12 @@ export class AttackExecution implements Execution {
     }
 
     if (!this.attack.isActive()) {
+      this.active = false;
+      return;
+    }
+
+    if (this.warId !== null && this.mg.warDiplomacy().isTruce(this.warId)) {
+      this.retreat();
       this.active = false;
       return;
     }
@@ -326,8 +336,26 @@ export class AttackExecution implements Execution {
       tickBudget -= tickFraction;
       troopCount -= attackerTroopLoss;
       this.attack.setTroops(troopCount);
-      if (targetPlayer) {
-        targetPlayer.removeTroops(defenderTroopLoss);
+      const actualDefenderLoss = targetPlayer
+        ? targetPlayer.removeTroops(defenderTroopLoss)
+        : 0;
+      if (targetPlayer && this.warId !== null) {
+        this.mg
+          .warDiplomacy()
+          .recordTroopLoss(
+            this.warId,
+            this._owner,
+            targetPlayer,
+            actualDefenderLoss,
+          );
+        this.mg
+          .warDiplomacy()
+          .recordTroopLoss(
+            this.warId,
+            targetPlayer,
+            this._owner,
+            attackerTroopLoss,
+          );
       }
       this._owner.conquer(tileToConquer);
       this.handleDeadDefender();

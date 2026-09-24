@@ -46,6 +46,7 @@ export class MirvExecution implements Execution {
   private pathIndex = 0;
 
   private targetPlayer: Player | TerraNullius;
+  private warId: number | null = null;
 
   private separateDst: TileRef;
   private spawnTile: TileRef;
@@ -77,6 +78,21 @@ export class MirvExecution implements Execution {
         console.warn(`cannot build MIRV`);
         this.active = false;
         return;
+      }
+      const currentTarget = this.mg.owner(this.dst);
+      if (currentTarget.isPlayer() && currentTarget !== this.player) {
+        if (!this.player.canAttackPlayer(currentTarget)) {
+          this.active = false;
+          return;
+        }
+        this.warId = this.mg
+          .warDiplomacy()
+          .beginHostileAction(this.player, currentTarget);
+        if (this.warId === null) {
+          this.active = false;
+          return;
+        }
+        this.player.registerHostileActionAgainst(currentTarget);
       }
       this.spawnTile = spawn;
       this.nuke = this.player.buildUnit(UnitType.MIRV, spawn, {
@@ -220,6 +236,8 @@ export class MirvExecution implements Execution {
         // order of extra speed assign does not matter, they all spawn at once.
         warheadSpeed + speedOffset,
         waitBase + this.random.nextInt(0, 15),
+        true,
+        this.warId,
       );
       this.warheadExecutions.push(execution);
       this.mg.addExecution(execution);

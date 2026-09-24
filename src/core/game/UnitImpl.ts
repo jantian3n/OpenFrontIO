@@ -5,6 +5,7 @@ import {
   NukeState,
   Player,
   SamLauncherState,
+  Structures,
   TerraNullius,
   Tick,
   TrainType,
@@ -272,7 +273,7 @@ export class UnitImpl implements Unit {
     );
   }
 
-  modifyHealth(delta: number, attacker?: Player): void {
+  modifyHealth(delta: number, attacker?: Player, warId?: number): void {
     const previousHealth = this._health;
     const nextHealth = withinInt(
       this._health + toInt(delta),
@@ -294,7 +295,7 @@ export class UnitImpl implements Unit {
     this._health = nextHealth;
     this.mg.addUpdate(this.toUpdate());
     if (this._health === 0n) {
-      this.delete(true, attacker);
+      this.delete(true, attacker, warId);
     }
   }
 
@@ -322,7 +323,7 @@ export class UnitImpl implements Unit {
     return this._deletionAt !== null && this.mg.ticks() - this._deletionAt > 0;
   }
 
-  delete(displayMessage?: boolean, destroyer?: Player): void {
+  delete(displayMessage?: boolean, destroyer?: Player, warId?: number): void {
     if (!this.isActive()) {
       throw new Error(`cannot delete ${this} not active`);
     }
@@ -336,6 +337,29 @@ export class UnitImpl implements Unit {
     this._active = false;
     this.mg.addUpdate(this.toUpdate());
     this.mg.removeUnit(this);
+
+    if (destroyer !== undefined) {
+      const scoringWarId =
+        warId ?? this.mg.warDiplomacy().warIdBetween(destroyer, this._owner);
+      if (scoringWarId !== null) {
+        if (Structures.has(this._type)) {
+          this.mg
+            .warDiplomacy()
+            .recordStructureLoss(
+              scoringWarId,
+              destroyer,
+              this._owner,
+              this._type,
+              Math.max(1, this._level),
+              this._id,
+            );
+        } else {
+          this.mg
+            .warDiplomacy()
+            .recordUnitLoss(scoringWarId, this._id, destroyer, this._owner);
+        }
+      }
+    }
 
     if (displayMessage !== false) {
       this.displayMessageOnDeleted();
@@ -738,6 +762,21 @@ export class UnitImpl implements Unit {
     if (this._level <= 0) {
       this.delete(true, destroyer);
       return;
+    }
+    if (destroyer !== undefined && Structures.has(this._type)) {
+      const warId = this.mg.warDiplomacy().warIdBetween(destroyer, this._owner);
+      if (warId !== null) {
+        this.mg
+          .warDiplomacy()
+          .recordStructureLoss(
+            warId,
+            destroyer,
+            this._owner,
+            this._type,
+            1,
+            this._id,
+          );
+      }
     }
     // unitCount()/unitsOwned() are level-weighted and memoised on these versions
     this.mg.bumpUnitsVersion();

@@ -65,7 +65,7 @@ describe("MIRVExecution", () => {
     expect(mirvExec.isActive()).toBe(true);
   });
 
-  test("MIRV should break alliances on launch", async () => {
+  test("MIRV targeting an ally is blocked while the formal alliance remains", async () => {
     const req = player.createAllianceRequest(otherPlayer);
     req!.accept();
 
@@ -77,9 +77,10 @@ describe("MIRVExecution", () => {
 
     executeTicks(game, 2);
 
-    // Alliance should be broken
-    expect(player.isAlliedWith(otherPlayer)).toBe(false);
-    expect(player.isTraitor()).toBe(true);
+    expect(player.isAlliedWith(otherPlayer)).toBe(true);
+    expect(player.isTraitor()).toBe(false);
+    expect(player.units(UnitType.MIRV)).toHaveLength(0);
+    expect(game.warDiplomacy().warsFor(player)).toEqual([]);
   });
 
   test("MIRV should separate into warheads", async () => {

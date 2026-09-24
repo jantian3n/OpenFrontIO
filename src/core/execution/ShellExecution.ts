@@ -17,6 +17,7 @@ export class ShellExecution implements Execution {
     private _owner: Player,
     private ownerUnit: Unit,
     private target: Unit,
+    private warId: number | null = null,
   ) {}
 
   init(mg: Game, ticks: number): void {
@@ -54,7 +55,11 @@ export class ShellExecution implements Execution {
         this.active = false;
         const targetType = this.target.type();
         const targetWasActive = this.target.isActive();
-        this.target.modifyHealth(-this.effectOnTarget(), this._owner);
+        this.target.modifyHealth(
+          -this.effectOnTarget(),
+          this._owner,
+          this.warId ?? undefined,
+        );
         // Award veterancy to the firing warship when this shell lands the
         // killing blow on an enemy warship or transport ship.
         if (
