@@ -1,5 +1,6 @@
 import { simpleHash } from "../Util";
 import {
+  PlayerType,
   Structures,
   UnitType,
   type Game,
@@ -19,6 +20,13 @@ export type WarJoinReason =
   | "puppet"
   | "callToArms"
   | "independence";
+
+export const WAR_PROPOSAL_DURATION_TICKS = 300;
+export const WAR_CALL_DURATION_TICKS = 300;
+export const WAR_OFFER_COOLDOWN_TICKS = 300;
+export const WAR_TRUCE_DURATION_TICKS = 600;
+export const WAR_REPARATIONS_SCORE_THRESHOLD = 2_000;
+export const WAR_PUPPET_SCORE_THRESHOLD = 7_500;
 
 export interface WarParticipantSnapshot {
   playerID: PlayerID;
@@ -62,6 +70,16 @@ export interface WarPeaceProposalSnapshot {
   }>;
 }
 
+export interface WarCallSnapshot {
+  id: number;
+  inviterID: PlayerID;
+  recipientID: PlayerID;
+  side: 0 | 1;
+  createdAt: Tick;
+  expiresAt: Tick;
+  status: "pending" | "accepted" | "rejected" | "expired" | "cancelled";
+}
+
 export interface WarEventSnapshot {
   sequence: number;
   tick: Tick;
@@ -76,6 +94,7 @@ export interface WarSnapshot {
   status: WarStatus;
   sides: [WarSideSnapshot, WarSideSnapshot];
   proposal?: WarPeaceProposalSnapshot;
+  calls: WarCallSnapshot[];
   truceEndsAt?: Tick;
   events: WarEventSnapshot[];
 }
@@ -94,6 +113,7 @@ interface MutableWarSide extends WarSideSnapshot {
 interface MutableWar extends WarSnapshot {
   sides: [MutableWarSide, MutableWarSide];
   events: WarEventSnapshot[];
+  calls: WarCallSnapshot[];
 }
 
 const MAX_RECENT_WAR_EVENTS = 20;
@@ -103,6 +123,9 @@ export class WarDiplomacy {
   private readonly _dirtyWars = new Set<number>();
   private _nextWarID = 1;
   private _nextEventSequence = 1;
+  private _nextOfferID = 1;
+  private readonly _peaceCooldownUntil = new Map<number, Tick>();
+  private readonly _callCooldownUntil = new Map<string, Tick>();
 
   constructor(private readonly game: Game) {}
 
@@ -159,6 +182,7 @@ export class WarDiplomacy {
         this.makeSide(defendingSide, defenderParticipants),
       ],
       events: [],
+      calls: [],
     };
     this._wars.set(id, war);
     this.addEvent(war, "warStarted", attacker.id(), target.id());
@@ -185,6 +209,7 @@ export class WarDiplomacy {
   }
 
   tick(): void {
+    const now = this.game.ticks();
     for (const war of this._wars.values()) {
       let changed = false;
       for (const side of war.sides) {
@@ -199,6 +224,38 @@ export class WarDiplomacy {
           }
         }
       }
+      if (war.proposal !== undefined) {
+        const signerEliminated = war.proposal.signatures.some(
+          (signature) => !this.game.player(signature.playerID).isAlive(),
+        );
+        if (signerEliminated || now >= war.proposal.expiresAt) {
+          const reason = signerEliminated
+            ? "peaceProposalInvalidated"
+            : "peaceProposalExpired";
+          this.cancelProposal(war, reason);
+          changed = true;
+        }
+      }
+      for (const call of war.calls) {
+        if (call.status === "pending" && now >= call.expiresAt) {
+          call.status = "expired";
+          this._callCooldownUntil.set(
+            this.callKey(war.id, call.recipientID),
+            now + WAR_OFFER_COOLDOWN_TICKS,
+          );
+          this.addEvent(war, "callExpired", call.inviterID, call.recipientID);
+          changed = true;
+        }
+      }
+      if (
+        war.status === "truce" &&
+        war.truceEndsAt !== undefined &&
+        now >= war.truceEndsAt
+      ) {
+        war.status = "ended";
+        this.addEvent(war, "truceEnded");
+        changed = true;
+      }
       if (changed) this.emit(war);
     }
   }
@@ -207,6 +264,13 @@ export class WarDiplomacy {
     const normalized = {
       nextWarID: this._nextWarID,
       nextEventSequence: this._nextEventSequence,
+      nextOfferID: this._nextOfferID,
+      peaceCooldownUntil: Array.from(this._peaceCooldownUntil.entries()).sort(
+        ([left], [right]) => left - right,
+      ),
+      callCooldownUntil: Array.from(this._callCooldownUntil.entries()).sort(
+        ([left], [right]) => left.localeCompare(right),
+      ),
       wars: Array.from(this._wars.values())
         .sort((a, b) => a.id - b.id)
         .map((war) => ({
@@ -238,6 +302,208 @@ export class WarDiplomacy {
 
   isTruce(warId: number): boolean {
     return this._wars.get(warId)?.status === "truce";
+  }
+
+  createCallToArms(
+    warId: number,
+    inviter: Player,
+    recipient: Player,
+  ): number | null {
+    const war = this._wars.get(warId);
+    if (
+      war === undefined ||
+      war.status !== "active" ||
+      !inviter.isAlive() ||
+      !recipient.isAlive()
+    ) {
+      return null;
+    }
+    const sideIndex = this.sideIndex(war, inviter.id());
+    if (
+      sideIndex === null ||
+      !this.hasParticipant(war.sides[sideIndex], inviter.id()) ||
+      war.sides[sideIndex].participants.find(
+        (participant) => participant.playerID === inviter.id(),
+      )?.reason === "callToArms" ||
+      this.sideIndex(war, recipient.id()) !== null ||
+      inviter.allianceWith(recipient) === null ||
+      !this.isEligibleCallRecipient(war, sideIndex, recipient)
+    ) {
+      return null;
+    }
+    const key = this.callKey(warId, recipient.id());
+    if ((this._callCooldownUntil.get(key) ?? 0) > this.game.ticks()) {
+      return null;
+    }
+    const existing = war.calls.find(
+      (call) =>
+        call.recipientID === recipient.id() && call.status === "pending",
+    );
+    if (existing !== undefined) return existing.id;
+
+    const now = this.game.ticks();
+    const call: WarCallSnapshot = {
+      id: this._nextOfferID++,
+      inviterID: inviter.id(),
+      recipientID: recipient.id(),
+      side: sideIndex,
+      createdAt: now,
+      expiresAt: now + WAR_CALL_DURATION_TICKS,
+      status: "pending",
+    };
+    war.calls.push(call);
+    this.addEvent(war, "callOffered", inviter.id(), recipient.id());
+    this.emit(war);
+    return call.id;
+  }
+
+  answerCall(warId: number, recipient: Player, accepted: boolean): boolean {
+    const war = this._wars.get(warId);
+    const call = war?.calls.find(
+      (offer) =>
+        offer.recipientID === recipient.id() && offer.status === "pending",
+    );
+    if (war === undefined || war.status !== "active" || call === undefined) {
+      return false;
+    }
+    if (this.game.ticks() >= call.expiresAt) {
+      this.expireCall(war, call);
+      return false;
+    }
+    if (accepted) {
+      const inviter = this.game.player(call.inviterID);
+      if (
+        !recipient.isAlive() ||
+        !inviter.isAlive() ||
+        inviter.allianceWith(recipient) === null ||
+        !this.isEligibleCallRecipient(war, call.side, recipient)
+      ) {
+        this.expireCall(war, call);
+        return false;
+      }
+      call.status = "accepted";
+      this.joinSide(war, call.side, recipient, "callToArms");
+      this.addEvent(war, "callAccepted", recipient.id());
+    } else {
+      call.status = "rejected";
+      this._callCooldownUntil.set(
+        this.callKey(war.id, recipient.id()),
+        this.game.ticks() + WAR_OFFER_COOLDOWN_TICKS,
+      );
+      this.addEvent(war, "callRejected", recipient.id());
+    }
+    this.emit(war);
+    return true;
+  }
+
+  proposePeace(
+    warId: number,
+    proposer: Player,
+    clause: WarClause,
+  ): number | null {
+    const war = this._wars.get(warId);
+    const now = this.game.ticks();
+    if (
+      war === undefined ||
+      war.status !== "active" ||
+      war.proposal !== undefined ||
+      (this._peaceCooldownUntil.get(warId) ?? 0) > now ||
+      !proposer.isAlive() ||
+      this.sideIndex(war, proposer.id()) === null ||
+      !this.isValidClause(war, clause)
+    ) {
+      return null;
+    }
+
+    const proposalID = this._nextOfferID++;
+    const signatures = war.sides
+      .flatMap((side) => side.participants)
+      .filter((participant) => this.game.player(participant.playerID).isAlive())
+      .map((participant) => ({
+        playerID: participant.playerID,
+        status:
+          participant.playerID === proposer.id()
+            ? ("accepted" as const)
+            : this.game.player(participant.playerID).type() === PlayerType.Human
+              ? ("pending" as const)
+              : this.botAcceptsClause(war, participant.playerID, clause)
+                ? ("accepted" as const)
+                : ("rejected" as const),
+      }))
+      .sort((a, b) => a.playerID.localeCompare(b.playerID));
+    war.proposal = {
+      id: proposalID,
+      proposerID: proposer.id(),
+      createdAt: now,
+      expiresAt: now + WAR_PROPOSAL_DURATION_TICKS,
+      clause: structuredClone(clause),
+      signatures,
+    };
+    war.status = "peacePending";
+    this.addEvent(war, "peaceProposed", proposer.id());
+
+    if (signatures.some((signature) => signature.status === "rejected")) {
+      this.cancelProposal(war, "peaceRejected");
+    } else if (
+      signatures.every((signature) => signature.status === "accepted")
+    ) {
+      this.settleProposal(war);
+    }
+    this.emit(war);
+    return proposalID;
+  }
+
+  answerPeace(
+    warId: number,
+    proposalId: number,
+    responder: Player,
+    accepted: boolean,
+  ): boolean {
+    const war = this._wars.get(warId);
+    const proposal = war?.proposal;
+    const signature = proposal?.signatures.find(
+      (entry) => entry.playerID === responder.id(),
+    );
+    if (
+      war === undefined ||
+      war.status !== "peacePending" ||
+      proposal === undefined ||
+      proposal.id !== proposalId ||
+      signature?.status !== "pending" ||
+      !responder.isAlive()
+    ) {
+      return false;
+    }
+    if (
+      this.game.ticks() >= proposal.expiresAt ||
+      proposal.signatures.some(
+        (entry) => !this.game.player(entry.playerID).isAlive(),
+      )
+    ) {
+      this.cancelProposal(
+        war,
+        this.game.ticks() >= proposal.expiresAt
+          ? "peaceProposalExpired"
+          : "peaceProposalInvalidated",
+        responder.id(),
+      );
+      this.emit(war);
+      return false;
+    }
+    if (!accepted) {
+      signature.status = "rejected";
+      this.cancelProposal(war, "peaceRejected", responder.id());
+      this.emit(war);
+      return true;
+    }
+    signature.status = "accepted";
+    this.addEvent(war, "peaceSigned", responder.id());
+    let settledOrPending = true;
+    if (proposal.signatures.every((entry) => entry.status === "accepted")) {
+      settledOrPending = this.settleProposal(war);
+    }
+    this.emit(war);
+    return settledOrPending;
   }
 
   recordTerritoryChange(
@@ -623,6 +889,239 @@ export class WarDiplomacy {
     return false;
   }
 
+  private isEligibleCallRecipient(
+    war: MutableWar,
+    invitedSide: 0 | 1,
+    recipient: Player,
+  ): boolean {
+    const otherSide = war.sides[invitedSide === 0 ? 1 : 0];
+    return otherSide.participants.every((participant) => {
+      const opponent = this.game.player(participant.playerID);
+      return !this.hasBlockingRelation(recipient, opponent);
+    });
+  }
+
+  private joinSide(
+    war: MutableWar,
+    sideIndex: 0 | 1,
+    player: Player,
+    reason: WarJoinReason,
+  ): void {
+    const participant: MutableWarParticipant = {
+      playerID: player.id(),
+      joinedAt: this.game.ticks(),
+      reason,
+      isAlive: player.isAlive(),
+    };
+    const side = war.sides[sideIndex];
+    const baseline = this.makeSide([player], [participant]);
+    side.participants.push(participant);
+    side.participants.sort((a, b) => a.playerID.localeCompare(b.playerID));
+    for (const tile of baseline.baselineTerritory) {
+      side.baselineTerritory.add(tile);
+    }
+    for (const [id, troops] of baseline.baselineTroopsRemaining) {
+      side.baselineTroopsRemaining.set(id, troops);
+    }
+    for (const [id, value] of baseline.baselineMilitaryUnits) {
+      side.baselineMilitaryUnits.set(id, value);
+    }
+    for (const [id, value] of baseline.baselineStructures) {
+      side.baselineStructures.set(id, value);
+    }
+    side.baselineMilitaryValue += baseline.baselineMilitaryValue;
+    side.baselineStructureValue += baseline.baselineStructureValue;
+    this.recalculateScores(war);
+  }
+
+  private isValidClause(war: MutableWar, clause: WarClause): boolean {
+    if (clause.kind === "whitePeace") return true;
+    if (clause.kind === "reparations") {
+      if (!Number.isSafeInteger(clause.amount) || clause.amount < 0) {
+        return false;
+      }
+      if (
+        !this.game.hasPlayer(clause.payerId) ||
+        !this.game.hasPlayer(clause.receiverId)
+      ) {
+        return false;
+      }
+      const payer = this.game.player(clause.payerId);
+      const receiver = this.game.player(clause.receiverId);
+      const payerSide = this.sideIndex(war, payer.id());
+      const receiverSide = this.sideIndex(war, receiver.id());
+      return (
+        payer.isAlive() &&
+        receiver.isAlive() &&
+        payerSide !== null &&
+        receiverSide !== null &&
+        payerSide !== receiverSide &&
+        war.sides[receiverSide].score.total -
+          war.sides[payerSide].score.total >=
+          WAR_REPARATIONS_SCORE_THRESHOLD &&
+        payer.gold() >= BigInt(clause.amount)
+      );
+    }
+    if (clause.kind === "puppet") {
+      if (
+        !this.game.hasPlayer(clause.targetId) ||
+        !this.game.hasPlayer(clause.overlordId)
+      ) {
+        return false;
+      }
+      const target = this.game.player(clause.targetId);
+      const overlord = this.game.player(clause.overlordId);
+      const targetSide = this.sideIndex(war, target.id());
+      const overlordSide = this.sideIndex(war, overlord.id());
+      return (
+        target.isAlive() &&
+        overlord.isAlive() &&
+        targetSide !== null &&
+        overlordSide !== null &&
+        targetSide !== overlordSide &&
+        war.sides[overlordSide].score.total -
+          war.sides[targetSide].score.total >=
+          WAR_PUPPET_SCORE_THRESHOLD &&
+        !target.isSubject() &&
+        target.subjects().length === 0 &&
+        !overlord.isSubject() &&
+        !target.isOnSameTeam(overlord)
+      );
+    }
+
+    if (!this.game.hasPlayer(clause.subjectId)) return false;
+    const subject = this.game.player(clause.subjectId);
+    const overlord = subject.overlord();
+    return (
+      subject.isAlive() &&
+      subject.isPuppet() &&
+      overlord !== null &&
+      overlord.isAlive() &&
+      this.sideIndex(war, subject.id()) !== null &&
+      this.sideIndex(war, subject.id()) === this.sideIndex(war, overlord.id())
+    );
+  }
+
+  private botAcceptsClause(
+    war: MutableWar,
+    botID: PlayerID,
+    clause: WarClause,
+  ): boolean {
+    if (!this.isValidClause(war, clause)) return false;
+    const side = this.sideIndex(war, botID);
+    if (side === null) return false;
+    const ownScore = war.sides[side].score.total;
+    const enemyScore = war.sides[side === 0 ? 1 : 0].score.total;
+    if (clause.kind === "reparations") {
+      const payerSide = this.sideIndex(war, clause.payerId);
+      const receiverSide = this.sideIndex(war, clause.receiverId);
+      if (side === payerSide) return ownScore < enemyScore;
+      if (side === receiverSide) return ownScore >= enemyScore;
+    }
+    if (clause.kind === "puppet") {
+      const targetSide = this.sideIndex(war, clause.targetId);
+      const overlordSide = this.sideIndex(war, clause.overlordId);
+      if (side === targetSide) return ownScore < enemyScore;
+      if (side === overlordSide) return ownScore >= enemyScore;
+    }
+    if (clause.kind === "independence" && botID === clause.subjectId) {
+      return true;
+    }
+    return ownScore <= enemyScore + 1_000;
+  }
+
+  private settleProposal(war: MutableWar): boolean {
+    const proposal = war.proposal;
+    if (
+      proposal === undefined ||
+      proposal.signatures.some(
+        (signature) => signature.status !== "accepted",
+      ) ||
+      !this.isValidClause(war, proposal.clause)
+    ) {
+      this.cancelProposal(war, "peaceProposalInvalidated");
+      return false;
+    }
+
+    const clause = proposal.clause;
+    if (clause.kind === "reparations") {
+      const payer = this.game.player(clause.payerId);
+      const receiver = this.game.player(clause.receiverId);
+      const amount = BigInt(clause.amount);
+      if (payer.gold() < amount) {
+        this.cancelProposal(war, "peaceProposalInvalidated");
+        return false;
+      }
+      const removed = payer.removeGold(amount);
+      if (removed !== amount) {
+        if (removed > 0n) payer.addGold(removed);
+        this.cancelProposal(war, "peaceProposalInvalidated");
+        return false;
+      }
+      receiver.addGold(amount);
+    } else if (clause.kind === "puppet") {
+      if (
+        !this.game
+          .player(clause.targetId)
+          .formPuppetFromPeace(this.game.player(clause.overlordId))
+      ) {
+        this.cancelProposal(war, "peaceProposalInvalidated");
+        return false;
+      }
+    } else if (clause.kind === "independence") {
+      const subject = this.game.player(clause.subjectId);
+      const overlord = subject.overlord();
+      if (overlord === null || !overlord.releaseSubject(subject)) {
+        this.cancelProposal(war, "peaceProposalInvalidated");
+        return false;
+      }
+    }
+
+    const now = this.game.ticks();
+    war.status = "truce";
+    war.truceEndsAt = now + WAR_TRUCE_DURATION_TICKS;
+    war.proposal = undefined;
+    for (const call of war.calls) {
+      if (call.status === "pending") {
+        call.status = "cancelled";
+        this.addEvent(war, "callCancelled", undefined, call.recipientID);
+      }
+    }
+    this._peaceCooldownUntil.delete(war.id);
+    this.addEvent(war, "peaceAccepted");
+    this.addEvent(war, "truceBegan");
+    return true;
+  }
+
+  private cancelProposal(
+    war: MutableWar,
+    reason: string,
+    actorID?: PlayerID,
+  ): void {
+    if (war.proposal === undefined) return;
+    war.proposal = undefined;
+    if (war.status === "peacePending") war.status = "active";
+    this._peaceCooldownUntil.set(
+      war.id,
+      this.game.ticks() + WAR_OFFER_COOLDOWN_TICKS,
+    );
+    this.addEvent(war, reason, actorID);
+  }
+
+  private expireCall(war: MutableWar, call: WarCallSnapshot): void {
+    call.status = "expired";
+    this._callCooldownUntil.set(
+      this.callKey(war.id, call.recipientID),
+      this.game.ticks() + WAR_OFFER_COOLDOWN_TICKS,
+    );
+    this.addEvent(war, "callInvalidated", call.inviterID, call.recipientID);
+    this.emit(war);
+  }
+
+  private callKey(warId: number, recipientID: PlayerID): string {
+    return `${warId}:${recipientID}`;
+  }
+
   private addEvent(
     war: MutableWar,
     kind: string,
@@ -653,6 +1152,7 @@ export class WarDiplomacy {
       createdAt: war.createdAt,
       status: war.status,
       sides: [cloneSide(war.sides[0]), cloneSide(war.sides[1])],
+      calls: war.calls.map((call) => ({ ...call })),
       ...(war.proposal === undefined
         ? {}
         : { proposal: structuredClone(war.proposal) }),

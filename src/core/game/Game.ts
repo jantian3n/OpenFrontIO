@@ -772,6 +772,8 @@ export interface Player {
   canDemandSubjugation(other: Player): boolean;
   canRequestIndependence(other: Player): boolean;
   requestProtection(other: Player): boolean;
+  /** Applies puppet terms already ratified by a signed peace proposal. */
+  formPuppetFromPeace(overlord: Player): boolean;
   demandSubjugation(other: Player): boolean;
   requestIndependence(other: Player): boolean;
   acceptSubjectRequest(

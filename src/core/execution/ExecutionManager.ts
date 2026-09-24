@@ -20,15 +20,16 @@ import { MoveWarshipExecution } from "./MoveWarshipExecution";
 import { NationExecution } from "./NationExecution";
 import { NoOpExecution } from "./NoOpExecution";
 import { PauseExecution } from "./PauseExecution";
-import { SubjectExecution } from "./SubjectExecution";
 import { QuickChatExecution } from "./QuickChatExecution";
 import { RetreatExecution } from "./RetreatExecution";
 import { SpawnExecution } from "./SpawnExecution";
+import { SubjectExecution } from "./SubjectExecution";
 import { TargetPlayerExecution } from "./TargetPlayerExecution";
 import { TransportShipExecution } from "./TransportShipExecution";
 import { TribeSpawner } from "./TribeSpawner";
 import { UpgradeStructureExecution } from "./UpgradeStructureExecution";
 import { PlayerSpawner } from "./utils/PlayerSpawner";
+import { WarDiplomacyExecution } from "./WarDiplomacyExecution";
 
 export class Executor {
   // private random = new PseudoRandom(999)
@@ -142,6 +143,11 @@ export class Executor {
         );
       case "mark_disconnected":
         return new MarkDisconnectedExecution(player, intent.isDisconnected);
+      case "war_call_to_arms":
+      case "war_answer_call":
+      case "war_propose_peace":
+      case "war_answer_peace":
+        return new WarDiplomacyExecution(player, intent);
       case "toggle_pause":
         return new PauseExecution(player, intent.paused);
       default:

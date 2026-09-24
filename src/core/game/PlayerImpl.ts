@@ -1179,6 +1179,24 @@ export class PlayerImpl implements Player {
     return this.createSubjectRequest(other, "protection");
   }
 
+  formPuppetFromPeace(overlord: Player): boolean {
+    if (
+      this === overlord ||
+      !this.isAlive() ||
+      !overlord.isAlive() ||
+      this.isDisconnected() ||
+      overlord.isDisconnected() ||
+      this.isSubject() ||
+      this.subjects().length > 0 ||
+      overlord.isSubject() ||
+      this.isOnSameTeam(overlord)
+    ) {
+      return false;
+    }
+    this.applySubjectRelation(this, overlord as PlayerImpl, "subjugation");
+    return true;
+  }
+
   demandSubjugation(other: Player): boolean {
     return this.createSubjectRequest(other, "subjugation");
   }
@@ -1286,6 +1304,35 @@ export class PlayerImpl implements Player {
       return false;
     }
 
+    this.applySubjectRelation(subject, overlord, requestType);
+    this.mg.addUpdate({
+      type: GameUpdateType.SubjectRequestReply,
+      request: request.toUpdate(),
+      accepted: true,
+    });
+
+    // If protection is granted while the applicant is already under attack,
+    // the guarantee applies immediately to those existing defensive wars.
+    if (requestType === "protection") {
+      const currentAttackers = new Set<Player>();
+      for (const attack of subject.incomingAttacks()) {
+        if (!attack.isActive()) continue;
+        const attacker = attack.attacker();
+        if (attacker !== overlord) currentAttackers.add(attacker);
+      }
+      for (const attacker of currentAttackers) {
+        subject.raiseProtectionCall(attacker);
+      }
+    }
+
+    return true;
+  }
+
+  private applySubjectRelation(
+    subject: PlayerImpl,
+    overlord: PlayerImpl,
+    requestType: "protection" | "subjugation",
+  ): void {
     const directAlliance = subject.allianceWith(overlord);
     if (directAlliance !== null) {
       this.mg.removeAllianceSilently(directAlliance);
@@ -1330,27 +1377,8 @@ export class PlayerImpl implements Player {
     }
 
     this.clearSubjectRequestsInvolving(subject, overlord);
-    this.mg.addUpdate({
-      type: GameUpdateType.SubjectRequestReply,
-      request: request.toUpdate(),
-      accepted: true,
-    });
-
-    // If protection is granted while the applicant is already under attack,
-    // the guarantee applies immediately to those existing defensive wars.
-    if (requestType === "protection") {
-      const currentAttackers = new Set<Player>();
-      for (const attack of subject.incomingAttacks()) {
-        if (!attack.isActive()) continue;
-        const attacker = attack.attacker();
-        if (attacker !== overlord) currentAttackers.add(attacker);
-      }
-      for (const attacker of currentAttackers) {
-        subject.raiseProtectionCall(attacker);
-      }
-    }
-
-    return true;
+    subject._lastSubjectRequestTick.delete(overlord.id());
+    overlord._lastSubjectRequestTick.delete(subject.id());
   }
 
   rejectSubjectRequest(

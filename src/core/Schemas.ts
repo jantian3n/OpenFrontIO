@@ -38,6 +38,7 @@ export type Intent =
   | AllianceRequestIntent
   | AllianceRejectIntent
   | AllianceExtensionIntent
+  | WarDiplomacyIntent
   | BreakAllianceIntent
   | SubjectIntent
   | TargetPlayerIntent
@@ -67,6 +68,7 @@ export type AllianceRequestIntent = z.infer<typeof AllianceRequestIntentSchema>;
 export type AllianceRejectIntent = z.infer<typeof AllianceRejectIntentSchema>;
 export type BreakAllianceIntent = z.infer<typeof BreakAllianceIntentSchema>;
 export type SubjectIntent = z.infer<typeof SubjectIntentSchema>;
+export type WarDiplomacyIntent = z.infer<typeof WarDiplomacyIntentSchema>;
 export type TargetPlayerIntent = z.infer<typeof TargetPlayerIntentSchema>;
 export type EmojiIntent = z.infer<typeof EmojiIntentSchema>;
 export type DonateGoldIntent = z.infer<typeof DonateGoldIntentSchema>;
@@ -667,10 +669,49 @@ export const SubjectIntentSchema = z.object({
   ]),
   target: MappedID.optional(),
   subject: MappedID.optional(),
-  requestType: z
-    .enum(["protection", "subjugation", "independence"])
-    .optional(),
+  requestType: z.enum(["protection", "subjugation", "independence"]).optional(),
 });
+
+const WarIDSchema = zb.uint({ min: 1 });
+const WarClauseSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("whitePeace") }),
+  z.object({
+    kind: z.literal("reparations"),
+    payerId: MappedID,
+    receiverId: MappedID,
+    amount: zb.uint({ max: Number.MAX_SAFE_INTEGER }),
+  }),
+  z.object({
+    kind: z.literal("puppet"),
+    targetId: MappedID,
+    overlordId: MappedID,
+  }),
+  z.object({ kind: z.literal("independence"), subjectId: MappedID }),
+]);
+
+export const WarDiplomacyIntentSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("war_call_to_arms"),
+    warId: WarIDSchema,
+    recipient: MappedID,
+  }),
+  z.object({
+    type: z.literal("war_answer_call"),
+    warId: WarIDSchema,
+    accepted: z.boolean(),
+  }),
+  z.object({
+    type: z.literal("war_propose_peace"),
+    warId: WarIDSchema,
+    clause: WarClauseSchema,
+  }),
+  z.object({
+    type: z.literal("war_answer_peace"),
+    warId: WarIDSchema,
+    proposalId: WarIDSchema,
+    accepted: z.boolean(),
+  }),
+]);
 
 export const TargetPlayerIntentSchema = z.object({
   type: z.literal("targetPlayer"),
@@ -807,6 +848,7 @@ export const IntentSchema = z.discriminatedUnion("type", [
   MoveWarshipIntentSchema,
   QuickChatIntentSchema,
   AllianceExtensionIntentSchema,
+  ...WarDiplomacyIntentSchema.options,
   DeleteUnitIntentSchema,
   KickPlayerIntentSchema,
   TogglePauseIntentSchema,
