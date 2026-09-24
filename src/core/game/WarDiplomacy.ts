@@ -80,6 +80,11 @@ export interface WarCallSnapshot {
   status: "pending" | "accepted" | "rejected" | "expired" | "cancelled";
 }
 
+export interface PendingWarCall {
+  war: WarSnapshot;
+  call: WarCallSnapshot;
+}
+
 export interface WarEventSnapshot {
   sequence: number;
   tick: Tick;
@@ -99,7 +104,7 @@ export interface WarSnapshot {
   events: WarEventSnapshot[];
 }
 
-interface MutableWarParticipant extends WarParticipantSnapshot {}
+type MutableWarParticipant = WarParticipantSnapshot;
 interface MutableWarSide extends WarSideSnapshot {
   participants: MutableWarParticipant[];
   baselineTerritory: Set<TileRef>;
@@ -143,6 +148,15 @@ export class WarDiplomacy {
     const attackers = this.expandSide(attacker);
     const defenders = this.expandSide(target);
     return this.canSidesFight(attackers, defenders);
+  }
+
+  canAttackDisconnectedTeammate(attacker: Player, target: Player): boolean {
+    return (
+      attacker !== target &&
+      target.isDisconnected() &&
+      attacker.isOnSameTeam(target) &&
+      !this.isInTruceAcrossSides(attacker.id(), target.id())
+    );
   }
 
   beginHostileAction(attacker: Player, target: Player): number | null {
@@ -206,6 +220,23 @@ export class WarDiplomacy {
       )
       .sort((a, b) => a.id - b.id)
       .map((war) => this.snapshot(war));
+  }
+
+  pendingCallsFor(player: Player): PendingWarCall[] {
+    return Array.from(this._wars.values())
+      .filter((war) => war.status === "active")
+      .flatMap((war) =>
+        war.calls
+          .filter(
+            (call) =>
+              call.recipientID === player.id() && call.status === "pending",
+          )
+          .map((call) => ({ war: this.snapshot(war), call: { ...call } })),
+      )
+      .sort(
+        (left, right) =>
+          left.war.id - right.war.id || left.call.id - right.call.id,
+      );
   }
 
   tick(): void {

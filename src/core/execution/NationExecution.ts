@@ -201,6 +201,7 @@ export class NationExecution implements Execution {
     this.allianceBehavior.handleSubjectRequests();
     this.allianceBehavior.handleAllianceRequests();
     this.allianceBehavior.handleAllianceExtensionRequests();
+    this.allianceBehavior.handleWarDiplomacy();
     this.mirvBehavior.considerMIRV();
     this.structureBehavior.handleStructures();
     this.warshipBehavior.maybeSpawnWarship();

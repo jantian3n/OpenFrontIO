@@ -369,14 +369,6 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
     const hasPuppetLead =
       war.sides[leadingSide].score.total - war.sides[losingSide].score.total >=
       WAR_PUPPET_SCORE_THRESHOLD;
-    const independenceSubject = this.game.myPlayer();
-    const hasIndependenceTerm = Boolean(
-      independenceSubject?.isPuppet() &&
-      independenceSubject.overlord() &&
-      this.sideFor(war, independenceSubject.id()) !== null &&
-      this.sideFor(war, independenceSubject.id()) ===
-        this.sideFor(war, independenceSubject.overlord()!.id()),
-    );
     if (kind === "reparations") {
       return html`<div
         class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_8rem]"

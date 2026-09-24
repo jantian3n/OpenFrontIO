@@ -49,8 +49,12 @@ describe("WarDiplomacy", () => {
     attacker.conquer(game.ref(0, 0));
     defender.conquer(game.ref(40, 40));
 
-    const firstWarId = game.warDiplomacy().beginHostileAction(attacker, defender);
-    const secondWarId = game.warDiplomacy().beginHostileAction(attacker, defender);
+    const firstWarId = game
+      .warDiplomacy()
+      .beginHostileAction(attacker, defender);
+    const secondWarId = game
+      .warDiplomacy()
+      .beginHostileAction(attacker, defender);
     const wars = game.warDiplomacy().warsFor(attacker);
 
     expect(secondWarId).toBe(firstWarId);
@@ -140,9 +144,15 @@ describe("WarDiplomacy", () => {
           ),
         );
       }
-      [...players.values()].forEach((player, index) =>
-        player.conquer(game.ref(index * 8, index * 8)),
-      );
+      const tileByPlayer: Record<string, [number, number]> = {
+        attacker: [0, 0],
+        ally: [8, 8],
+        defender: [16, 16],
+      };
+      for (const [id, player] of players) {
+        const [x, y] = tileByPlayer[id];
+        player.conquer(game.ref(x, y));
+      }
       const attacker = players.get("attacker")!;
       const defender = players.get("defender")!;
       game.warDiplomacy().beginHostileAction(attacker, defender);

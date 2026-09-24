@@ -3,9 +3,16 @@ import {
   Game,
   GameMode,
   Player,
+  PlayerID,
   PlayerType,
   Relation,
 } from "../../game/Game";
+import {
+  WAR_PUPPET_SCORE_THRESHOLD,
+  WAR_REPARATIONS_SCORE_THRESHOLD,
+  type WarClause,
+  type WarSnapshot,
+} from "../../game/WarDiplomacy";
 import { PseudoRandom } from "../../PseudoRandom";
 import { assertNever } from "../../Util";
 import { AllianceExtensionExecution } from "../alliance/AllianceExtensionExecution";
@@ -18,6 +25,108 @@ import {
   NationEmojiBehavior,
 } from "./NationEmojiBehavior";
 import { findJuiciestTarget } from "./NationUtils";
+
+export interface AIPeaceCandidate {
+  playerID: PlayerID;
+  availableGold: bigint;
+  puppetEligible: boolean;
+}
+
+function warSideFor(war: WarSnapshot, playerID: PlayerID): 0 | 1 | null {
+  const index = war.sides.findIndex((side) =>
+    side.participants.some((participant) => participant.playerID === playerID),
+  );
+  return index === -1 ? null : (index as 0 | 1);
+}
+
+export function shouldInviteAlliesToWar(
+  war: WarSnapshot,
+  inviterID: PlayerID,
+): boolean {
+  if (war.status !== "active") return false;
+  const sideIndex = warSideFor(war, inviterID);
+  if (sideIndex === null) return false;
+  const inviter = war.sides[sideIndex].participants.find(
+    (participant) => participant.playerID === inviterID,
+  );
+  if (inviter === undefined || inviter.reason === "callToArms") return false;
+  const otherSide = war.sides[sideIndex === 0 ? 1 : 0];
+  return war.sides[sideIndex].score.total <= otherSide.score.total + 1_000;
+}
+
+export function shouldAcceptCallToArms(
+  war: WarSnapshot,
+  invitedSide: 0 | 1,
+): boolean {
+  if (war.status !== "active") return false;
+  return (
+    war.sides[invitedSide].score.total <=
+    war.sides[invitedSide === 0 ? 1 : 0].score.total + 1_000
+  );
+}
+
+export function chooseAINegotiationClause(
+  war: WarSnapshot,
+  proposerID: PlayerID,
+  candidates: readonly AIPeaceCandidate[],
+): WarClause | null {
+  if (war.status !== "active") return null;
+  const proposerSide = warSideFor(war, proposerID);
+  if (proposerSide === null) return null;
+  const opposingSide = proposerSide === 0 ? 1 : 0;
+  const scoreLead =
+    war.sides[proposerSide].score.total - war.sides[opposingSide].score.total;
+
+  if (scoreLead < -1_000) return { kind: "whitePeace" };
+  if (scoreLead < WAR_REPARATIONS_SCORE_THRESHOLD) return null;
+
+  const opposingIDs = new Set(
+    war.sides[opposingSide].participants
+      .filter((participant) => participant.isAlive)
+      .map((participant) => participant.playerID),
+  );
+  if (scoreLead >= WAR_PUPPET_SCORE_THRESHOLD) {
+    const puppetTarget = candidates
+      .filter(
+        (candidate) =>
+          opposingIDs.has(candidate.playerID) && candidate.puppetEligible,
+      )
+      .sort((left, right) => left.playerID.localeCompare(right.playerID))[0];
+    if (puppetTarget !== undefined) {
+      return {
+        kind: "puppet",
+        targetId: puppetTarget.playerID,
+        overlordId: proposerID,
+      };
+    }
+  }
+
+  const payer = candidates
+    .filter(
+      (candidate) =>
+        opposingIDs.has(candidate.playerID) && candidate.availableGold > 0n,
+    )
+    .sort((left, right) => {
+      if (left.availableGold !== right.availableGold) {
+        return left.availableGold > right.availableGold ? -1 : 1;
+      }
+      return left.playerID.localeCompare(right.playerID);
+    })[0];
+  if (payer === undefined) return null;
+
+  const tenPercent = payer.availableGold / 10n;
+  const amount = tenPercent > 0n ? tenPercent : 1n;
+  const safeAmount =
+    amount > BigInt(Number.MAX_SAFE_INTEGER)
+      ? Number.MAX_SAFE_INTEGER
+      : Number(amount);
+  return {
+    kind: "reparations",
+    payerId: payer.playerID,
+    receiverId: proposerID,
+    amount: safeAmount,
+  };
+}
 
 export class NationAllianceBehavior {
   constructor(
@@ -81,6 +190,60 @@ export class NationAllianceBehavior {
         }
       }
       this.player.rejectSubjectRequest(requestor, "subjugation");
+    }
+  }
+
+  handleWarDiplomacy(): void {
+    const diplomacy = this.game.warDiplomacy();
+    for (const { war, call } of diplomacy.pendingCallsFor(this.player)) {
+      diplomacy.answerCall(
+        war.id,
+        this.player,
+        shouldAcceptCallToArms(war, call.side),
+      );
+    }
+
+    for (const war of diplomacy.warsFor(this.player)) {
+      if (war.status !== "active") continue;
+
+      if (shouldInviteAlliesToWar(war, this.player.id())) {
+        for (const ally of [...this.player.allies()].sort((a, b) =>
+          a.id().localeCompare(b.id()),
+        )) {
+          diplomacy.createCallToArms(war.id, this.player, ally);
+        }
+      }
+
+      const ownSide = warSideFor(war, this.player.id());
+      if (ownSide === null) continue;
+      const opposingSide = ownSide === 0 ? 1 : 0;
+      const candidates: AIPeaceCandidate[] = war.sides[
+        opposingSide
+      ].participants
+        .filter((participant) => participant.isAlive)
+        .map((participant) => {
+          const target = this.game.player(participant.playerID);
+          const puppetEligible =
+            target.isAlive() &&
+            !target.isSubject() &&
+            target.subjects().length === 0 &&
+            !this.player.isSubject() &&
+            this.player.subjects().length === 0 &&
+            !target.isOnSameTeam(this.player);
+          return {
+            playerID: target.id(),
+            availableGold: target.gold(),
+            puppetEligible,
+          };
+        });
+      const clause = chooseAINegotiationClause(
+        war,
+        this.player.id(),
+        candidates,
+      );
+      if (clause !== null) {
+        diplomacy.proposePeace(war.id, this.player, clause);
+      }
     }
   }
 

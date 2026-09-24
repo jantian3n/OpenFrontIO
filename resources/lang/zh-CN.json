@@ -1193,7 +1193,6 @@
     "war_number": "战争 {number}",
     "started_at": "第 {tick} 回合开始",
     "truce": "停战剩余",
-    "ticks_remaining": "{ticks} 回合",
     "event_warStarted": "战争开始：{name}",
     "event_participantEliminated": "{name} 已被淘汰。",
     "event_callOffered": "{name} 召集了一名盟友。",

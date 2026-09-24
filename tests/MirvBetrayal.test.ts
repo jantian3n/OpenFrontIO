@@ -14,7 +14,7 @@ let game: Game;
 let player1: Player;
 let player2: Player;
 
-describe("MIRV betrayal side effects", () => {
+describe("MIRV war admission", () => {
   beforeEach(async () => {
     game = await setup("plains", { instantBuild: true }, [
       new PlayerInfo("player1", PlayerType.Human, "c1", "p1"),
@@ -37,15 +37,16 @@ describe("MIRV betrayal side effects", () => {
     expect(player1.isAlliedWith(player2)).toBe(true);
   });
 
-  test("a successful launch breaks the alliance and marks the launcher a traitor", () => {
+  test("a formal ally cannot be attacked by MIRV before joining a war", () => {
     player1.buildUnit(UnitType.MissileSilo, game.ref(0, 0), {});
 
     game.addExecution(new MirvExecution(player1, game.ref(10, 10)));
     executeTicks(game, 2); // init + spawn
 
-    expect(player1.units(UnitType.MIRV)).toHaveLength(1);
-    expect(player1.isAlliedWith(player2)).toBe(false);
-    expect(player1.isTraitor()).toBe(true);
+    expect(player1.units(UnitType.MIRV)).toHaveLength(0);
+    expect(player1.isAlliedWith(player2)).toBe(true);
+    expect(player1.isTraitor()).toBe(false);
+    expect(game.warDiplomacy().warsFor(player1)).toEqual([]);
   });
 
   test("a fizzled launch applies no betrayal side effects", () => {

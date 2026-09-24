@@ -40,6 +40,8 @@ describe("Donate troops to an ally", () => {
       new SpawnExecution(gameID, donorInfo, spawnA),
       new SpawnExecution(gameID, recipientInfo, spawnB),
     );
+    game.executeNextTick();
+    game.executeNextTick();
 
     // donor sends alliance request to recipient
     const allianceRequest = donor.createAllianceRequest(recipient);
@@ -100,6 +102,8 @@ describe("Donate gold to an ally", () => {
       new SpawnExecution(gameID, donorInfo, spawnA),
       new SpawnExecution(gameID, recipientInfo, spawnB),
     );
+    game.executeNextTick();
+    game.executeNextTick();
 
     // donor sends alliance request to recipient
     const allianceRequest = donor.createAllianceRequest(recipient);
@@ -120,8 +124,9 @@ describe("Donate gold to an ally", () => {
     game.executeNextTick();
     game.executeNextTick();
 
-    // 1 tick elapsed; PlayerExecution adds 100n passive income from workers
-    const passiveIncome = 100n;
+    // Two live ticks elapsed while the spawned PlayerExecution was initialized
+    // and the donation was settled.
+    const passiveIncome = 200n;
     expect(donor.gold()).toBe(donorGoldBefore - 5000n + passiveIncome);
     expect(recipient.gold()).toBe(recipientGoldBefore + 5000n + passiveIncome);
   });
@@ -141,6 +146,8 @@ describe("Donate gold to an ally", () => {
       new SpawnExecution("g", dInfo, game.ref(0, 10)),
       new SpawnExecution("g", rInfo, game.ref(0, 15)),
     );
+    game.executeNextTick();
+    game.executeNextTick();
     donor.createAllianceRequest(recipient)?.accept();
     game.executeNextTick();
     const donation = new DonateGoldExecution(donor, rInfo.id, null);
@@ -150,9 +157,11 @@ describe("Donate gold to an ally", () => {
     game.addExecution(donation);
     game.executeNextTick();
     game.executeNextTick();
-    // 1 tick elapsed for donation transfer; PlayerExecution adds 100n passive income from workers
-    const passiveIncome = 100n;
-    const expectedDonation = goldBefore / 3n;
+    // The donation amount is resolved during initialization, after that tick's
+    // passive worker income has been applied.
+    const passiveIncome = 200n;
+    const balanceAtInitialization = goldBefore + 100n;
+    const expectedDonation = balanceAtInitialization / 3n;
     expect(donor.gold()).toBe(goldBefore - expectedDonation + passiveIncome);
     expect(recipient.gold()).toBe(recBefore + expectedDonation + passiveIncome);
   });
@@ -193,6 +202,8 @@ describe("Donate troops to a non ally", () => {
       new SpawnExecution(gameID, donorInfo, spawnA),
       new SpawnExecution(gameID, recipientInfo, spawnB),
     );
+    game.executeNextTick();
+    game.executeNextTick();
 
     // Donor sends alliance request to Recipient
     const allianceRequest = donor.createAllianceRequest(recipient);
@@ -250,6 +261,8 @@ describe("Donate Gold to a non ally", () => {
       new SpawnExecution(gameID, donorInfo, spawnA),
       new SpawnExecution(gameID, recipientInfo, spawnB),
     );
+    game.executeNextTick();
+    game.executeNextTick();
 
     // Donor sends alliance request to Recipient
     const allianceRequest = donor.createAllianceRequest(recipient);

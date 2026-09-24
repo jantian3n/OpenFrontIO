@@ -1,5 +1,10 @@
 import { AllianceRequestExecution } from "../src/core/execution/alliance/AllianceRequestExecution";
-import { NationAllianceBehavior } from "../src/core/execution/nation/NationAllianceBehavior";
+import {
+  chooseAINegotiationClause,
+  NationAllianceBehavior,
+  shouldAcceptCallToArms,
+  shouldInviteAlliesToWar,
+} from "../src/core/execution/nation/NationAllianceBehavior";
 import { NationEmojiBehavior } from "../src/core/execution/nation/NationEmojiBehavior";
 import {
   AllianceRequest,
@@ -12,8 +17,192 @@ import {
   Tick,
   UnitType,
 } from "../src/core/game/Game";
+import type { WarSnapshot } from "../src/core/game/WarDiplomacy";
 import { PseudoRandom } from "../src/core/PseudoRandom";
 import { setup } from "./util/Setup";
+
+function makeWarSnapshot(
+  score0: number,
+  score1: number,
+  reason0: "attacker" | "callToArms" = "attacker",
+): WarSnapshot {
+  return {
+    id: 7,
+    createdAt: 0,
+    status: "active",
+    sides: [
+      {
+        participants: [
+          { playerID: "nation-a", joinedAt: 0, reason: reason0, isAlive: true },
+        ],
+        score: {
+          territory: score0,
+          militaryLosses: 0,
+          structures: 0,
+          total: score0,
+        },
+      },
+      {
+        participants: [
+          {
+            playerID: "nation-b",
+            joinedAt: 0,
+            reason: "defender",
+            isAlive: true,
+          },
+        ],
+        score: {
+          territory: score1,
+          militaryLosses: 0,
+          structures: 0,
+          total: score1,
+        },
+      },
+    ],
+    calls: [],
+    events: [],
+  };
+}
+
+describe("deterministic AI war diplomacy", () => {
+  test("call decisions depend only on stable side scores", () => {
+    const losingSide = makeWarSnapshot(100, 300);
+    expect(shouldInviteAlliesToWar(losingSide, "nation-a")).toBe(true);
+    expect(shouldAcceptCallToArms(losingSide, 0)).toBe(true);
+    expect(shouldAcceptCallToArms(makeWarSnapshot(100, 300), 0)).toBe(
+      shouldAcceptCallToArms(losingSide, 0),
+    );
+    expect(shouldAcceptCallToArms(makeWarSnapshot(100, 5000), 1)).toBe(false);
+  });
+
+  test("called participants cannot create an alliance chain", () => {
+    expect(
+      shouldInviteAlliesToWar(
+        makeWarSnapshot(100, 300, "callToArms"),
+        "nation-a",
+      ),
+    ).toBe(false);
+    expect(shouldInviteAlliesToWar(makeWarSnapshot(5000, 0), "nation-a")).toBe(
+      false,
+    );
+  });
+
+  test("peace decisions choose deterministic terms from score and candidate data", () => {
+    const leading = makeWarSnapshot(9000, 500);
+    leading.sides[1].participants.push({
+      playerID: "nation-b2",
+      joinedAt: 0,
+      reason: "team",
+      isAlive: true,
+    });
+    const candidates = [
+      { playerID: "nation-b", availableGold: 900n, puppetEligible: false },
+      { playerID: "nation-b2", availableGold: 1900n, puppetEligible: true },
+    ];
+    expect(chooseAINegotiationClause(leading, "nation-a", candidates)).toEqual({
+      kind: "puppet",
+      targetId: "nation-b2",
+      overlordId: "nation-a",
+    });
+    expect(chooseAINegotiationClause(leading, "nation-a", candidates)).toEqual(
+      chooseAINegotiationClause(leading, "nation-a", candidates),
+    );
+    expect(
+      chooseAINegotiationClause(makeWarSnapshot(100, 2500), "nation-a", []),
+    ).toEqual({ kind: "whitePeace" });
+    expect(
+      chooseAINegotiationClause(makeWarSnapshot(1500, 1000), "nation-a", []),
+    ).toBeNull();
+  });
+
+  test("a nation joins an eligible call but does not invite its own ally chain", async () => {
+    const testGame = await setup("plains");
+    const addNation = (id: string) =>
+      testGame.addPlayer(
+        new PlayerInfo(id, PlayerType.Nation, null, `${id}_client`),
+      );
+    const inviter = addNation("inviter");
+    const invited = addNation("invited");
+    const chained = addNation("chained");
+    const defender = addNation("defender");
+    for (const [index, player] of [
+      inviter,
+      invited,
+      chained,
+      defender,
+    ].entries()) {
+      player.conquer(testGame.ref(index * 10, 0));
+      player.setTroops(10_000);
+    }
+    inviter.createAllianceRequest(invited)?.accept();
+    invited.createAllianceRequest(chained)?.accept();
+    const warId = testGame
+      .warDiplomacy()
+      .beginHostileAction(inviter, defender)!;
+    const makeBehavior = (player: Player) => {
+      const random = new PseudoRandom(123);
+      return new NationAllianceBehavior(
+        random,
+        testGame,
+        player,
+        new NationEmojiBehavior(random, testGame, player),
+      );
+    };
+
+    makeBehavior(inviter).handleWarDiplomacy();
+    expect(testGame.warDiplomacy().getWar(warId)?.calls).toMatchObject([
+      { recipientID: invited.id(), status: "pending" },
+    ]);
+
+    makeBehavior(invited).handleWarDiplomacy();
+    const snapshot = testGame.warDiplomacy().getWar(warId)!;
+    expect(
+      snapshot.sides[0].participants.find(
+        (participant) => participant.playerID === invited.id(),
+      )?.reason,
+    ).toBe("callToArms");
+    expect(
+      snapshot.calls.some((call) => call.recipientID === chained.id()),
+    ).toBe(false);
+  });
+
+  test("a leading nation proposes affordable reparations and bot voters settle them", async () => {
+    const testGame = await setup("plains");
+    const inviter = testGame.addPlayer(
+      new PlayerInfo("peace_inviter", PlayerType.Nation, null, "peace_inviter"),
+    );
+    const defender = testGame.addPlayer(
+      new PlayerInfo(
+        "peace_defender",
+        PlayerType.Nation,
+        null,
+        "peace_defender",
+      ),
+    );
+    inviter.conquer(testGame.ref(0, 0));
+    defender.conquer(testGame.ref(40, 40));
+    defender.conquer(testGame.ref(41, 40));
+    inviter.setTroops(10_000);
+    defender.setTroops(10_000);
+    defender.addGold(1_000n);
+    const warId = testGame
+      .warDiplomacy()
+      .beginHostileAction(inviter, defender)!;
+
+    inviter.conquer(testGame.ref(40, 40));
+    const random = new PseudoRandom(7);
+    const behavior = new NationAllianceBehavior(
+      random,
+      testGame,
+      inviter,
+      new NationEmojiBehavior(random, testGame, inviter),
+    );
+    behavior.handleWarDiplomacy();
+    expect(testGame.warDiplomacy().getWar(warId)?.status).toBe("truce");
+    expect(defender.gold()).toBe(900n);
+    expect(inviter.gold()).toBe(100n);
+  });
+});
 
 let game: Game;
 let player: Player;

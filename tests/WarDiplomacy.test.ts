@@ -7,7 +7,8 @@ import {
   PlayerType,
 } from "../src/core/game/Game";
 import { GameImpl } from "../src/core/game/GameImpl";
-import { WarDiplomacyIntentSchema } from "../src/core/Schemas";
+import { GameRunner } from "../src/core/GameRunner";
+import { Turn, WarDiplomacyIntentSchema } from "../src/core/Schemas";
 import { setup } from "./util/Setup";
 
 type TestGame = Awaited<ReturnType<typeof setup>>;
@@ -75,6 +76,49 @@ async function makeWar(
 }
 
 describe("war diplomacy offers and settlements", () => {
+  test("replaying the same turn history reconstructs the same active war and hash", async () => {
+    async function replayActiveWar() {
+      const game = await setup("plains");
+      const attacker = addPlayer(game, "attacker");
+      const defender = addPlayer(game, "defender");
+      attacker.conquer(game.ref(0, 0));
+      defender.conquer(game.ref(40, 40));
+      attacker.setTroops(10_000);
+
+      const runner = new GameRunner(
+        game,
+        new Executor(game, "war_replay", undefined),
+        () => {},
+      );
+      const history: Turn[] = [
+        {
+          turnNumber: 1,
+          intents: [
+            {
+              type: "attack",
+              clientID: "attacker",
+              targetID: defender.id(),
+              troops: 5_000,
+            },
+          ],
+        },
+      ];
+      history.forEach((turn) => runner.addTurn(turn));
+
+      expect(runner.executeNextTick()).toBe(true);
+      return {
+        war: game.warDiplomacy().warsFor(attacker)[0],
+        hash: game.warDiplomacy().hash(),
+      };
+    }
+
+    const continuous = await replayActiveWar();
+    const replayed = await replayActiveWar();
+
+    expect(continuous.war).toEqual(replayed.war);
+    expect(continuous.hash).toBe(replayed.hash);
+  });
+
   test("a called ally joins only the named war after accepting, and duplicate answers are harmless", async () => {
     const { diplomacy, warId, attacker, ally } = await makeWar({ ally: true });
     const callId = diplomacy.createCallToArms(warId, attacker, ally);

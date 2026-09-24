@@ -83,9 +83,15 @@ export class AttackExecution implements Execution {
       return;
     }
 
-    if (this.target.isPlayer() && !this._owner.canAttackPlayer(this.target)) {
-      this.active = false;
-      return;
+    if (this.target.isPlayer()) {
+      const diplomacy = this.mg.warDiplomacy();
+      if (
+        !this._owner.canAttackPlayer(this.target) &&
+        !diplomacy.canAttackDisconnectedTeammate(this._owner, this.target)
+      ) {
+        this.active = false;
+        return;
+      }
     }
 
     this.startTroops ??= this.mg
@@ -106,22 +112,26 @@ export class AttackExecution implements Execution {
 
     if (this.target.isPlayer()) {
       const targetPlayer = this.target as Player;
-      this.warId = this.mg
-        .warDiplomacy()
-        .beginHostileAction(this._owner, targetPlayer);
+      const diplomacy = this.mg.warDiplomacy();
+      this.warId = diplomacy.beginHostileAction(this._owner, targetPlayer);
       if (this.warId === null) {
-        if (this.removeTroops) this._owner.addTroops(this.startTroops);
-        this.active = false;
-        return;
-      }
-      this._owner.registerHostileActionAgainst(targetPlayer);
-      if (
-        targetPlayer.type() !== PlayerType.Bot &&
-        this._owner.type() !== PlayerType.Bot
-      ) {
-        // Don't let bots embargo since they can't trade anyway.
-        targetPlayer.addEmbargo(this._owner, true);
-        this.rejectIncomingAllianceRequests(targetPlayer);
+        if (
+          !diplomacy.canAttackDisconnectedTeammate(this._owner, targetPlayer)
+        ) {
+          if (this.removeTroops) this._owner.addTroops(this.startTroops);
+          this.active = false;
+          return;
+        }
+      } else {
+        this._owner.registerHostileActionAgainst(targetPlayer);
+        if (
+          targetPlayer.type() !== PlayerType.Bot &&
+          this._owner.type() !== PlayerType.Bot
+        ) {
+          // Don't let bots embargo since they can't trade anyway.
+          targetPlayer.addEmbargo(this._owner, true);
+          this.rejectIncomingAllianceRequests(targetPlayer);
+        }
       }
     }
 
