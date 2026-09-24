@@ -13,6 +13,7 @@ import {
   UnitType,
 } from "../../core/game/Game";
 import { GameMap, TileRef } from "../../core/game/GameMap";
+import type { WarSnapshot } from "../../core/game/WarDiplomacy";
 import {
   GameUpdateType,
   GameUpdateViewData,
@@ -77,6 +78,7 @@ export class GameView implements GameMap {
   private startTick: Tick | null = null;
   private smallIDToID = new Map<number, PlayerID>();
   private _players = new Map<PlayerID, PlayerView>();
+  private _wars = new Map<number, WarSnapshot>();
   private _units = new Map<number, UnitView>();
   /**
    * Long-lived state maps (renderer's plain-object shape). Each entry shares
@@ -313,6 +315,10 @@ export class GameView implements GameMap {
 
     if (gu.updates === null) {
       throw new Error("lastUpdate.updates not initialized");
+    }
+
+    for (const update of gu.updates[GameUpdateType.War] ?? []) {
+      this._wars.set(update.war.id, update.war);
     }
 
     const spawnPhaseEndUpdate = gu.updates[GameUpdateType.SpawnPhaseEnd][0] as
@@ -1043,6 +1049,14 @@ export class GameView implements GameMap {
 
   players(): PlayerView[] {
     return Array.from(this._players.values());
+  }
+
+  wars(): WarSnapshot[] {
+    return Array.from(this._wars.values()).sort((a, b) => a.id - b.id);
+  }
+
+  war(id: number): WarSnapshot | undefined {
+    return this._wars.get(id);
   }
 
   teamClanTag(team: Team | null): string | null {

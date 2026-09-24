@@ -19,6 +19,7 @@ import {
   WarshipState,
 } from "./Game";
 import { TileRef } from "./GameMap";
+import type { WarSnapshot } from "./WarDiplomacy";
 
 export interface GameUpdateViewData {
   tick: number;
@@ -112,6 +113,7 @@ export enum GameUpdateType {
   SubjectRequestReply,
   ProtectionCall,
   ProtectionCallReply,
+  War,
 }
 
 export type GameUpdate =
@@ -141,7 +143,13 @@ export type GameUpdate =
   | SubjectRequestUpdate
   | SubjectRequestReplyUpdate
   | ProtectionCallUpdate
-  | ProtectionCallReplyUpdate;
+  | ProtectionCallReplyUpdate
+  | WarUpdate;
+
+export interface WarUpdate {
+  type: GameUpdateType.War;
+  war: WarSnapshot;
+}
 
 export interface BonusEventUpdate {
   type: GameUpdateType.BonusEvent;

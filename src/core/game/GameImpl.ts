@@ -51,6 +51,7 @@ import { assignTeams, resolveTeamsList } from "./TeamAssignment";
 import { TerraNulliusImpl } from "./TerraNulliusImpl";
 import { UnitGrid, UnitPredicate } from "./UnitGrid";
 import { WaterManager } from "./WaterManager";
+import { WarDiplomacy } from "./WarDiplomacy";
 
 export function createGame(
   humans: PlayerInfo[],
@@ -114,6 +115,7 @@ export class GameImpl implements Game {
   private _isPaused: boolean = false;
   private _winner: Player | Team | null = null;
   private _waterManager: WaterManager;
+  private _warDiplomacy: WarDiplomacy;
   private _sharedWaterCache: SharedWaterCache;
   private _teamGameSpawnAreas: TeamGameSpawnAreas | undefined;
   /** Tiles from nuke blast radii this tick, drained by the renderer. */
@@ -141,6 +143,7 @@ export class GameImpl implements Game {
       _config.disableNavMesh(),
     );
     this._sharedWaterCache = new SharedWaterCache(this);
+    this._warDiplomacy = new WarDiplomacy(this);
 
     if (_config.gameConfig().gameMode === GameMode.Team) {
       this.populateTeams();
@@ -497,6 +500,7 @@ export class GameImpl implements Game {
   executeNextTick(): GameUpdates {
     this.updates = createGameUpdatesMap();
     this.tileUpdatePairs.length = 0;
+    this._warDiplomacy.tick();
     this.execs.forEach((e) => {
       if (
         (!this.inSpawnPhase() || e.activeDuringSpawnPhase()) &&
@@ -635,7 +639,11 @@ export class GameImpl implements Game {
     this._players.forEach((p) => {
       hash += p.hash();
     });
-    return hash;
+    return hash + this._warDiplomacy.hash();
+  }
+
+  warDiplomacy(): WarDiplomacy {
+    return this._warDiplomacy;
   }
 
   terraNullius(): TerraNullius {

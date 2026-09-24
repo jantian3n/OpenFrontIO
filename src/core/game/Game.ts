@@ -15,6 +15,7 @@ import { RailNetwork } from "./RailNetwork";
 import { Stats } from "./Stats";
 import { ReadonlyTileSet } from "./TileSet";
 import { UnitPredicate } from "./UnitGrid";
+import type { WarDiplomacy } from "./WarDiplomacy";
 
 function isEnumValue<T extends Record<string, string | number>>(
   enumObj: T,
@@ -896,6 +897,7 @@ export interface Game extends GameMap {
 
   // Alliances
   expireAlliance(alliance: Alliance): void;
+  warDiplomacy(): WarDiplomacy;
 
   // Immunity timer
   isSpawnImmunityActive(): boolean;
