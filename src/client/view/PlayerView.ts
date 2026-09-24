@@ -16,6 +16,7 @@ import {
   PlayerID,
   PlayerProfile,
   PlayerType,
+  SubjectFormationType,
   SubjectRelationKind,
   SubjectRequestType,
   Team,
@@ -614,8 +615,7 @@ export class PlayerView {
 
   isPuppet(): boolean {
     return (
-      this.isSubject() &&
-      this.state.subjectKind === SubjectRelationKind.Puppet
+      this.isSubject() && this.state.subjectKind === SubjectRelationKind.Puppet
     );
   }
 
@@ -636,8 +636,8 @@ export class PlayerView {
     return (this.state.subjectKind ?? null) as SubjectRelationKind | null;
   }
 
-  subjectOrigin(): SubjectRequestType | null {
-    return (this.state.subjectOrigin ?? null) as SubjectRequestType | null;
+  subjectOrigin(): SubjectFormationType | null {
+    return this.state.subjectOrigin ?? null;
   }
 
   autonomy(): number | null {

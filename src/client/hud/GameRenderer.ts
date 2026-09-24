@@ -44,6 +44,7 @@ import { SettingsModal } from "./layers/SettingsModal";
 import { SpawnTimer } from "./layers/SpawnTimer";
 import { TutorialPanel } from "./layers/TutorialPanel";
 import { UnitDisplay } from "./layers/UnitDisplay";
+import { WarDiplomacyPanel } from "./layers/WarDiplomacyPanel";
 import { WinModal } from "./layers/WinModal";
 import { loadAllSprites } from "./SpriteLoader";
 
@@ -239,6 +240,15 @@ export function createRenderer(
   playerPanel.emojiTable = emojiTable;
   playerPanel.uiState = uiState;
 
+  const warDiplomacyPanel = document.querySelector(
+    "war-diplomacy-panel",
+  ) as WarDiplomacyPanel;
+  if (!(warDiplomacyPanel instanceof WarDiplomacyPanel)) {
+    console.error("war diplomacy panel not found");
+  }
+  warDiplomacyPanel.game = game;
+  warDiplomacyPanel.eventBus = eventBus;
+
   playerPanel.setRole(playerRole);
 
   const chatModal = document.querySelector("chat-modal") as ChatModal;
@@ -357,6 +367,7 @@ export function createRenderer(
     replayPanel,
     settingsModal,
     playerPanel,
+    warDiplomacyPanel,
     headsUpMessage,
     multiTabModal,
     inGamePromo,

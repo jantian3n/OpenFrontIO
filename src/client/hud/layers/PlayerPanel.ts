@@ -26,10 +26,10 @@ import {
   PlayerReportedEvent,
   SendAllianceRequestIntentEvent,
   SendBreakAllianceIntentEvent,
-  SendSubjectIntentEvent,
   SendEmbargoAllIntentEvent,
   SendEmbargoIntentEvent,
   SendEmojiIntentEvent,
+  SendSubjectIntentEvent,
   SendTargetPlayerIntentEvent,
 } from "../../Transport";
 import { UIState } from "../../UIState";
@@ -257,9 +257,7 @@ export class PlayerPanel extends LitElement implements Controller {
     requestType?: "subjugation" | "independence",
   ) {
     e.stopPropagation();
-    this.eventBus.emit(
-      new SendSubjectIntentEvent(action, target, requestType),
-    );
+    this.eventBus.emit(new SendSubjectIntentEvent(action, target, requestType));
     this.hide();
   }
 
@@ -645,6 +643,54 @@ export class PlayerPanel extends LitElement implements Controller {
     `;
   }
 
+  private renderWarStatus(my: PlayerView, other: PlayerView) {
+    const war = (this.g.wars?.() ?? []).find((entry) => {
+      const onSide0 = entry.sides[0].participants.some(
+        (participant) => participant.playerID === my.id(),
+      );
+      const otherOnSide1 = entry.sides[1].participants.some(
+        (participant) => participant.playerID === other.id(),
+      );
+      const onSide1 = entry.sides[1].participants.some(
+        (participant) => participant.playerID === my.id(),
+      );
+      const otherOnSide0 = entry.sides[0].participants.some(
+        (participant) => participant.playerID === other.id(),
+      );
+      return (onSide0 && otherOnSide1) || (onSide1 && otherOnSide0);
+    });
+    if (!war || war.status === "ended") return html``;
+    const isTruce = war.status === "truce";
+    const remaining =
+      war.truceEndsAt === undefined
+        ? 0
+        : Math.max(0, Math.ceil((war.truceEndsAt - this.g.ticks()) / 10));
+
+    return html`<div
+      class="mt-2 rounded-xl border px-3 py-2 text-sm ${isTruce
+        ? "border-cyan-300/20 bg-cyan-300/5 text-cyan-100"
+        : "border-red-300/20 bg-red-300/5 text-red-100"}"
+      role="status"
+      aria-live="polite"
+    >
+      <div class="flex items-center justify-between gap-2">
+        <span class="font-semibold"
+          >${translateText(
+            isTruce ? "player_panel.war_truce" : "player_panel.war_active",
+          )}</span
+        >
+        ${isTruce
+          ? html`<span class="tabular-nums">${renderDuration(remaining)}</span>`
+          : ""}
+      </div>
+      ${isTruce
+        ? html`<p class="mt-1 text-xs text-cyan-100/75">
+            ${translateText("player_panel.war_attack_disabled_truce")}
+          </p>`
+        : ""}
+    </div>`;
+  }
+
   private renderResources(other: PlayerView) {
     return html`
       <div class="mb-1 flex justify-between gap-2">
@@ -920,7 +966,7 @@ export class PlayerPanel extends LitElement implements Controller {
     const canTarget = this.actions?.interaction?.canTarget;
     const canEmbargo = this.actions?.interaction?.canEmbargo;
     const isSubjectRelation = my.isInSubjectRelation(other);
-    const isMyOverlord = my.isSubjectOf(other);
+    const isMyOverlord = my.isSubjectOf?.(other) ?? false;
 
     return html`
       <div class="flex flex-col gap-2.5">
@@ -992,14 +1038,14 @@ export class PlayerPanel extends LitElement implements Controller {
                     })
                   : !isSubjectRelation
                     ? actionButton({
-                      onClick: (e: MouseEvent) =>
-                        this.handleStopEmbargoClick(e, my, other),
-                      icon: startTradingIcon,
-                      iconAlt: "Start Trading",
-                      title: translateText("player_panel.start_trade"),
-                      label: translateText("player_panel.start_trade"),
-                      type: "green",
-                    })
+                        onClick: (e: MouseEvent) =>
+                          this.handleStopEmbargoClick(e, my, other),
+                        icon: startTradingIcon,
+                        iconAlt: "Start Trading",
+                        title: translateText("player_panel.start_trade"),
+                        label: translateText("player_panel.start_trade"),
+                        type: "green",
+                      })
                     : ""}
                 ${canBreakAlliance
                   ? actionButton({
@@ -1049,8 +1095,12 @@ export class PlayerPanel extends LitElement implements Controller {
                         ),
                       icon: shieldIcon,
                       iconAlt: "Accept Subject Request",
-                      title: translateText("player_panel.accept_subject_request"),
-                      label: translateText("player_panel.accept_subject_request"),
+                      title: translateText(
+                        "player_panel.accept_subject_request",
+                      ),
+                      label: translateText(
+                        "player_panel.accept_subject_request",
+                      ),
                       type: "green",
                     })
                   : ""}
@@ -1065,8 +1115,12 @@ export class PlayerPanel extends LitElement implements Controller {
                         ),
                       icon: breakAllianceIcon,
                       iconAlt: "Reject Subject Request",
-                      title: translateText("player_panel.reject_subject_request"),
-                      label: translateText("player_panel.reject_subject_request"),
+                      title: translateText(
+                        "player_panel.reject_subject_request",
+                      ),
+                      label: translateText(
+                        "player_panel.reject_subject_request",
+                      ),
                       type: "red",
                     })
                   : ""}
@@ -1249,6 +1303,9 @@ export class PlayerPanel extends LitElement implements Controller {
                     <!-- Identity (flag, name, type, traitor, relation) -->
                     <div class="mb-1">
                       ${this.renderIdentityRow(other, viewer)}
+                      ${my && my !== other
+                        ? this.renderWarStatus(viewer, other)
+                        : ""}
                     </div>
 
                     ${this.sendTarget && !isSpectator

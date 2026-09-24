@@ -96,7 +96,7 @@ describe("war diplomacy offers and settlements", () => {
     const execution = new Executor(
       game,
       "war_game",
-      attacker.clientID(),
+      attacker.clientID() ?? undefined,
     ).createExec({
       type: "war_call_to_arms",
       clientID: attacker.clientID()!,

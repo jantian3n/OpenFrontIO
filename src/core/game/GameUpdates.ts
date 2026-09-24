@@ -3,14 +3,15 @@ import {
   EmojiMessage,
   GameUpdates,
   Gold,
+  LegacySubjectFormationType,
+  LegacySubjectRelationKind,
   MessageType,
   NameViewData,
   NukeState,
   PlayerID,
   PlayerType,
   SamLauncherState,
-  LegacySubjectFormationType,
-  LegacySubjectRelationKind,
+  SubjectFormationType,
   SubjectRelationKind,
   SubjectRequestType,
   Team,
@@ -278,10 +279,7 @@ export interface PlayerUpdate {
   subjects?: number[];
   /** Metadata for this player's own subject relationship, null when sovereign. */
   subjectKind?: SubjectRelationKind | LegacySubjectRelationKind | null;
-  subjectOrigin?:
-    | SubjectRequestType
-    | LegacySubjectFormationType
-    | null;
+  subjectOrigin?: SubjectFormationType | LegacySubjectFormationType | null;
   subjectCreatedAt?: Tick | null;
   autonomy?: number | null;
   tributeRate?: number | null;

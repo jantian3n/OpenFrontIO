@@ -34,6 +34,7 @@ import {
   LiveStats,
   ReportReason,
   ServerMessage,
+  WarDiplomacyIntent,
   Winner,
 } from "../core/Schemas";
 import {
@@ -82,6 +83,10 @@ export class SendSubjectIntentEvent implements GameEvent {
     public readonly requestType?: "subjugation" | "independence",
     public readonly subject?: PlayerView,
   ) {}
+}
+
+export class SendWarDiplomacyIntentEvent implements GameEvent {
+  constructor(public readonly intent: WarDiplomacyIntent) {}
 }
 
 export class SendUpgradeStructureIntentEvent implements GameEvent {
@@ -308,6 +313,9 @@ export class Transport {
       this.onBreakAllianceRequestUIEvent(e),
     );
     this.subscribe(SendSubjectIntentEvent, (e) => this.onSendSubjectIntent(e));
+    this.subscribe(SendWarDiplomacyIntentEvent, (e) =>
+      this.sendIntent(e.intent),
+    );
     this.subscribe(SendSpawnIntentEvent, (e) => this.onSendSpawnIntentEvent(e));
     this.subscribe(SendAttackIntentEvent, (e) => this.onSendAttackIntent(e));
     this.subscribe(SendUpgradeStructureIntentEvent, (e) =>
