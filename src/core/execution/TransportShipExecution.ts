@@ -282,6 +282,15 @@ export class TransportShipExecution implements Execution {
           }
           return;
         }
+        if (
+          this.mg.owner(this.dst) !== this.target ||
+          (this.target.isPlayer() &&
+            !this.attacker.canAttackPlayer(this.target))
+        ) {
+          this.boat.updateTransportShipState({ isRetreating: true });
+          this.retreatDst = null;
+          return;
+        }
         this.attacker.conquer(this.dst);
         if (this.target.isPlayer() && this.attacker.isFriendly(this.target)) {
           this.attacker.addTroops(this.boat.troops());

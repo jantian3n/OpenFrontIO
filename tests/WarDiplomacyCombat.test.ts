@@ -23,13 +23,35 @@ describe("war combat integration", () => {
     const attacker = game.player("attacker");
     const defender = game.player("defender");
     attacker.conquer(game.ref(0, 0));
-    defender.conquer(game.ref(40, 40));
+    defender.conquer(game.ref(1, 0));
 
     game.addExecution(new AttackExecution(10_000, attacker, defender.id()));
     game.executeNextTick();
 
     expect(game.warDiplomacy().warsFor(attacker)).toHaveLength(1);
     expect(game.warDiplomacy().warsFor(defender)[0].id).toBe(1);
+  });
+
+  test("does not start a war or consume troops when it has no hostile border", async () => {
+    const game = await setup("plains", {}, [
+      new PlayerInfo("attacker", PlayerType.Human, null, "attacker"),
+      new PlayerInfo("defender", PlayerType.Human, null, "defender"),
+    ]);
+    const attacker = game.player("attacker");
+    const defender = game.player("defender");
+    attacker.conquer(game.ref(0, 0));
+    defender.conquer(game.ref(40, 40));
+    defender.createAllianceRequest(attacker);
+    const troopsBefore = attacker.troops();
+
+    game.addExecution(
+      new AttackExecution(10_000, attacker, defender.id(), game.ref(0, 0)),
+    );
+    game.executeNextTick();
+
+    expect(game.warDiplomacy().warsFor(attacker)).toEqual([]);
+    expect(attacker.troops()).toBe(troopsBefore);
+    expect(attacker.incomingAllianceRequests()).toHaveLength(1);
   });
 
   test("same-team players cannot attack each other or create a war", async () => {

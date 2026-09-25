@@ -110,6 +110,31 @@ export class AttackExecution implements Execution {
       return;
     }
 
+    this.attack = this._owner.createAttack(
+      this.target,
+      this.startTroops,
+      this.sourceTile,
+      new Set<TileRef>(),
+    );
+
+    if (this.sourceTile !== null) {
+      this.addNeighbors(this.sourceTile);
+    } else {
+      this.refreshToConquer();
+    }
+
+    // A queued attack only becomes hostile once it has a legal border to
+    // advance into. Otherwise it must not leave a war or diplomatic side
+    // effects behind.
+    if (this.toConquer.size() === 0) {
+      if (this.removeTroops || this.sourceTile !== null) {
+        this._owner.addTroops(this.startTroops);
+      }
+      this.attack.delete();
+      this.active = false;
+      return;
+    }
+
     if (this.target.isPlayer()) {
       const targetPlayer = this.target as Player;
       const diplomacy = this.mg.warDiplomacy();
@@ -119,6 +144,7 @@ export class AttackExecution implements Execution {
           !diplomacy.canAttackDisconnectedTeammate(this._owner, targetPlayer)
         ) {
           if (this.removeTroops) this._owner.addTroops(this.startTroops);
+          this.attack.delete();
           this.active = false;
           return;
         }
@@ -133,19 +159,6 @@ export class AttackExecution implements Execution {
           this.rejectIncomingAllianceRequests(targetPlayer);
         }
       }
-    }
-
-    this.attack = this._owner.createAttack(
-      this.target,
-      this.startTroops,
-      this.sourceTile,
-      new Set<TileRef>(),
-    );
-
-    if (this.sourceTile !== null) {
-      this.addNeighbors(this.sourceTile);
-    } else {
-      this.refreshToConquer();
     }
 
     // Record stats
