@@ -616,21 +616,23 @@ git commit -m "feat: replace radial actions with a text context menu"
 - Consumes: completed implementations and task-level commits from Tasks 1–6.
 - Produces: a clean, tested feature branch ready to push to `origin`.
 
-- [ ] **Step 1: Run all war diplomacy, combat, subject, panel, and context-menu tests.**
+- [x] **Step 1: Run all war diplomacy, combat, subject, panel, and context-menu tests.**
 
 Run: `npx vitest run tests/core/WarDiplomacy.test.ts tests/WarDiplomacy.test.ts tests/WarDiplomacyCombat.test.ts tests/PlayerImpl.test.ts tests/client/WarDiplomacyPanel.test.ts tests/client/graphics/TextContextMenu.test.ts tests/client/graphics/RadialMenuElements.test.ts tests/client/graphics/RadialMenuSpawn.test.ts tests/core/executions/TransportShipExecutionWarDiplomacy.test.ts`
 
 Expected: PASS. If a pre-existing unrelated failure appears, capture the exact test and compare it against the baseline recorded before implementation.
 
-- [ ] **Step 2: Run repository lint and production build.**
+- [x] **Step 2: Run repository lint and production build.**
 
 Run: `npm run lint && npm run build-prod`
 
 Expected: both commands exit 0.
 
-- [ ] **Step 3: Run the full `npm test` suite** because the earlier review explicitly identified it as not green; record and resolve failures caused by this change, and report any confirmed baseline failures separately.
+- [x] **Step 3: Run the full `npm test` suite** because the earlier review explicitly identified it as not green; record and resolve failures caused by this change, and report any confirmed baseline failures separately.
 
-- [ ] **Step 4: Review the final diff** with `git diff origin/main...HEAD`, inspect the worktree status, and verify that no resource-request, ally-support, or alternate settlement changes were pulled in.
+Full-suite result: `npm test` did not finish green. The run reproduced the baseline `localStorage`-unavailable client failures and stalled in `tests/server/GameApiCors.test.ts` (7 request timeouts) and `tests/server/WorkerPathPrefix.test.ts` (4 request timeouts); it was interrupted after those suites stopped making progress. The run also caught an English translation-key ordering regression from this branch; that was fixed, and `tests/EnJsonSorted.test.ts` now passes. The final focused regression group passes 105 tests across 10 files.
+
+- [x] **Step 4: Review the final diff** with `git diff origin/main...HEAD`, inspect the worktree status, and verify that no resource-request, ally-support, or alternate settlement changes were pulled in.
 
 - [ ] **Step 5: Push the completed branch to GitHub.**
 
