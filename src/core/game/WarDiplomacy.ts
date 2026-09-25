@@ -412,8 +412,24 @@ export class WarDiplomacy {
         this.expireCall(war, call);
         return false;
       }
+      const joining = this.expandSide(recipient).filter((member) =>
+        member.isAlive(),
+      );
+      if (!this.canCoalitionJoin(war, call.side, joining)) {
+        this.expireCall(war, call);
+        return false;
+      }
       call.status = "accepted";
-      this.joinSide(war, call.side, recipient, "callToArms");
+      for (const member of joining) {
+        if (this.sideIndex(war, member.id()) === call.side) continue;
+        const reason: WarJoinReason =
+          member === recipient
+            ? "callToArms"
+            : member.isOnSameTeam(recipient)
+              ? "team"
+              : "puppet";
+        this.joinSide(war, call.side, member, reason);
+      }
       this.addEvent(war, "callAccepted", recipient.id());
     } else {
       call.status = "rejected";
@@ -930,6 +946,31 @@ export class WarDiplomacy {
       const opponent = this.game.player(participant.playerID);
       return !this.hasBlockingRelation(recipient, opponent);
     });
+  }
+
+  private canCoalitionJoin(
+    war: MutableWar,
+    sideIndex: 0 | 1,
+    members: Player[],
+  ): boolean {
+    const opposingSide = war.sides[sideIndex === 0 ? 1 : 0];
+    const opposingIDs = new Set(
+      opposingSide.participants.map((participant) => participant.playerID),
+    );
+    const uniqueMembers = new Map(
+      members.map((member) => [member.id(), member] as const),
+    );
+
+    for (const member of uniqueMembers.values()) {
+      const existingSide = this.sideIndex(war, member.id());
+      if (existingSide !== null && existingSide !== sideIndex) return false;
+      if (opposingIDs.has(member.id())) return false;
+      for (const participant of opposingSide.participants) {
+        const opponent = this.game.player(participant.playerID);
+        if (this.hasBlockingRelation(member, opponent)) return false;
+      }
+    }
+    return true;
   }
 
   private joinSide(

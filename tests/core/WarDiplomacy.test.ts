@@ -111,6 +111,110 @@ describe("WarDiplomacy", () => {
     expect(game.warDiplomacy().warsFor(ally)).toEqual([]);
   });
 
+  test("accepting a call joins the recipient's team and subject coalition once", async () => {
+    const game = await setup("plains");
+    const attacker = addPlayerWithTeam(
+      game,
+      new PlayerInfo("attacker", PlayerType.Human, null, "attacker"),
+      "Red",
+    );
+    const defender = addPlayerWithTeam(
+      game,
+      new PlayerInfo("defender", PlayerType.Human, null, "defender"),
+      "Blue",
+    );
+    const recipient = addPlayerWithTeam(
+      game,
+      new PlayerInfo("recipient", PlayerType.Human, null, "recipient"),
+      "Green",
+    );
+    const teammate = addPlayerWithTeam(
+      game,
+      new PlayerInfo("teammate", PlayerType.Human, null, "teammate"),
+      "Green",
+    );
+    const subject = addPlayerWithTeam(
+      game,
+      new PlayerInfo("subject", PlayerType.Bot, null, "subject"),
+    );
+    [attacker, defender, recipient, teammate, subject].forEach(
+      (member, index) => member.conquer(game.ref(index * 8, index * 8)),
+    );
+    expect(subject.formPuppetFromPeace(recipient)).toBe(true);
+    attacker.createAllianceRequest(recipient)?.accept();
+    const warId = game.warDiplomacy().beginHostileAction(attacker, defender)!;
+    const callId = game
+      .warDiplomacy()
+      .createCallToArms(warId, attacker, recipient);
+
+    expect(callId).not.toBeNull();
+    expect(game.warDiplomacy().answerCall(warId, recipient, true)).toBe(true);
+
+    const participants = game.warDiplomacy().getWar(warId)!.sides[0]
+      .participants;
+    for (const member of [recipient, teammate, subject]) {
+      expect(
+        participants.filter(
+          (participant) => participant.playerID === member.id(),
+        ),
+      ).toHaveLength(1);
+    }
+    expect(participants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          playerID: recipient.id(),
+          reason: "callToArms",
+        }),
+        expect.objectContaining({ playerID: teammate.id(), reason: "team" }),
+        expect.objectContaining({ playerID: subject.id(), reason: "puppet" }),
+      ]),
+    );
+  });
+
+  test("rejects a called coalition that conflicts with the opposing side", async () => {
+    const game = await setup("plains");
+    const attacker = addPlayerWithTeam(
+      game,
+      new PlayerInfo("attacker", PlayerType.Human, null, "attacker"),
+      "Red",
+    );
+    const defender = addPlayerWithTeam(
+      game,
+      new PlayerInfo("defender", PlayerType.Human, null, "defender"),
+      "Blue",
+    );
+    const recipient = addPlayerWithTeam(
+      game,
+      new PlayerInfo("recipient", PlayerType.Human, null, "recipient"),
+      "Green",
+    );
+    const teammate = addPlayerWithTeam(
+      game,
+      new PlayerInfo("teammate", PlayerType.Human, null, "teammate"),
+      "Green",
+    );
+    [attacker, defender, recipient, teammate].forEach((member, index) =>
+      member.conquer(game.ref(index * 8, index * 8)),
+    );
+    attacker.createAllianceRequest(recipient)?.accept();
+    teammate.createAllianceRequest(defender)?.accept();
+    const warId = game.warDiplomacy().beginHostileAction(attacker, defender)!;
+    const callId = game
+      .warDiplomacy()
+      .createCallToArms(warId, attacker, recipient);
+
+    expect(callId).not.toBeNull();
+    expect(game.warDiplomacy().answerCall(warId, recipient, true)).toBe(false);
+    expect(
+      game.warDiplomacy().getWar(warId)!.sides[0].participants,
+    ).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ playerID: recipient.id() }),
+        expect.objectContaining({ playerID: teammate.id() }),
+      ]),
+    );
+  });
+
   test("an existing formal alliance blocks war creation without partial sides", async () => {
     const game = await setup("plains", {}, [
       new PlayerInfo("attacker", PlayerType.Human, null, "attacker"),

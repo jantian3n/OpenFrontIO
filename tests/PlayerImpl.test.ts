@@ -232,7 +232,12 @@ describe("PlayerImpl", () => {
     test("a puppet can defend itself and follow an overlord-designated enemy", () => {
       formPuppet();
       const defensiveEnemy = game.addPlayer(
-        new PlayerInfo("defensiveEnemy", PlayerType.Bot, null, "defensive_enemy"),
+        new PlayerInfo(
+          "defensiveEnemy",
+          PlayerType.Bot,
+          null,
+          "defensive_enemy",
+        ),
       );
       const overlordEnemy = game.addPlayer(
         new PlayerInfo("overlordEnemy", PlayerType.Bot, null, "overlord_enemy"),
@@ -246,6 +251,24 @@ describe("PlayerImpl", () => {
       player.target(overlordEnemy);
       expect(other.canTarget(overlordEnemy)).toBe(true);
       expect(other.canAttackPlayer(overlordEnemy)).toBe(true);
+    });
+
+    test("a puppet can join its overlord's defense when the overlord is attacked", () => {
+      formPuppet();
+      const enemy = game.addPlayer(
+        new PlayerInfo("enemy", PlayerType.Bot, null, "enemy"),
+      );
+      enemy.conquer(game.ref(40, 40));
+      enemy.recordAggressionAgainst(player);
+
+      const warId = game.warDiplomacy().beginHostileAction(enemy, player)!;
+
+      expect(other.canAttackPlayer(enemy)).toBe(true);
+      expect(
+        game.warDiplomacy().getWar(warId)?.sides[1].participants,
+      ).toContainEqual(
+        expect.objectContaining({ playerID: other.id(), reason: "puppet" }),
+      );
     });
 
     test("a subjugation request can be rejected", () => {
@@ -272,7 +295,9 @@ describe("PlayerImpl", () => {
 
       expect(other.canRequestIndependence(player)).toBe(true);
       expect(other.requestIndependence(player)).toBe(true);
-      expect(other.isRequestingSubjectRelation(player, "independence")).toBe(true);
+      expect(other.isRequestingSubjectRelation(player, "independence")).toBe(
+        true,
+      );
       expect(player.rejectSubjectRequest(other, "independence")).toBe(true);
       expect(other.isSubject()).toBe(true);
 

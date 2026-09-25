@@ -1258,15 +1258,14 @@ export class PlayerImpl implements Player {
     // stronger player to become a puppet, while a stronger player may demand
     // subjugation. Determine the orientation from the same deterministic
     // eligibility checks used when each request is created.
-    const applicantRequest = this.canFormSubjectRelation(
-      requestor,
-      this,
-      true,
-    );
+    const applicantRequest = this.canFormSubjectRelation(requestor, this, true);
     const subject = (applicantRequest ? requestor : this) as PlayerImpl;
     const overlord = (applicantRequest ? this : requestor) as PlayerImpl;
 
-    if (!applicantRequest && !this.canFormSubjectRelation(this, requestor, false)) {
+    if (
+      !applicantRequest &&
+      !this.canFormSubjectRelation(this, requestor, false)
+    ) {
       return false;
     }
 
@@ -1501,6 +1500,13 @@ export class PlayerImpl implements Player {
 
     const overlord = this._overlord;
     if (overlord === null || !overlord.isAlive()) return false;
+
+    const overlordWasAttacked =
+      other.hasRecentAggressionAgainst(overlord) ||
+      overlord
+        .incomingAttacks()
+        .some((attack) => attack.isActive() && attack.attacker() === other);
+    if (overlordWasAttacked) return true;
 
     const overlordDesignatedEnemy =
       overlord.targets().includes(other) ||
@@ -2452,8 +2458,7 @@ export class PlayerImpl implements Player {
   hasRecentAggressionAgainst(player: Player): boolean {
     const tick = this._lastAggressionTick.get(player.id());
     return (
-      tick !== undefined &&
-      this.mg.ticks() - tick < HOSTILE_ACTION_MEMORY_TICKS
+      tick !== undefined && this.mg.ticks() - tick < HOSTILE_ACTION_MEMORY_TICKS
     );
   }
 
