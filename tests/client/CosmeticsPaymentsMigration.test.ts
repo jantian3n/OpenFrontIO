@@ -39,7 +39,11 @@ import {
   invalidateUserMe,
 } from "../../src/client/Api";
 import type { ResolvedCosmetic } from "../../src/client/Cosmetics";
-import { purchaseCosmetic, resolveCosmetics } from "../../src/client/Cosmetics";
+import {
+  invalidateCosmetics,
+  purchaseCosmetic,
+  resolveCosmetics,
+} from "../../src/client/Cosmetics";
 import {
   showInGameAlert,
   showInGameConfirm,
@@ -82,11 +86,39 @@ function resolved(over: Partial<ResolvedCosmetic>): ResolvedCosmetic {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  policy.STEAM_TIER_CHANGE_IN_APP = false;
+  invalidateCosmetics();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        patterns: {},
+        flags: {},
+        subscriptions: {
+          vanguard: {
+            name: "vanguard",
+            product: null,
+            rarity: "common",
+            description: "",
+            priceMonthly: 5,
+            dailySoftCurrency: 0,
+            dailyHardCurrency: 0,
+            hardCurrencySignupBonus: 0,
+            unlimitedRanked: false,
+            canCreatePublicLobbies: false,
+          },
+        },
+      }),
+    })) as unknown as typeof fetch,
+  );
   startPurchaseMock.mockResolvedValue({ outcome: "redirecting" });
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => {
+  invalidateCosmetics();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 

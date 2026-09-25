@@ -201,12 +201,11 @@ export class WarDiplomacy {
         ? existing.id
         : null;
     }
-    if (this.findWarOnSameSide(subject.id(), overlord.id()) !== undefined) {
-      return null;
-    }
-
     const subjectSide = this.expandIndependenceSubjectSide(subject, overlord);
-    const overlordSide = this.expandIndependenceOverlordSide(overlord, subject);
+    const overlordSide = this.expandIndependenceOverlordSide(
+      overlord,
+      subjectSide,
+    );
     if (
       !this.canIndependenceSidesFight(
         subjectSide,
@@ -1034,9 +1033,12 @@ export class WarDiplomacy {
 
   private expandIndependenceOverlordSide(
     overlord: Player,
-    subject: Player,
+    subjectSide: Player[],
   ): Player[] {
-    return this.expandSide(overlord).filter((member) => member !== subject);
+    const subjectIDs = new Set(subjectSide.map((member) => member.id()));
+    return this.expandSide(overlord).filter(
+      (member) => !subjectIDs.has(member.id()),
+    );
   }
 
   private canIndependenceSidesFight(
@@ -1067,8 +1069,6 @@ export class WarDiplomacy {
         }
         if (
           this.hasBlockingRelation(subjectMember, overlordMember) ||
-          this.findWarOnSameSide(subjectMember.id(), overlordMember.id()) !==
-            undefined ||
           this.findWarBetween(subjectMember.id(), overlordMember.id()) !==
             undefined
         ) {

@@ -16,7 +16,7 @@ This work covers the war diplomacy gaps identified during review:
 - A puppet must be able to defend its overlord when the overlord is attacked.
 - Accepting a call to arms must bring the recipient's eligible teammates and subjects into that war.
 - A war must end when one side has no living participants.
-- Refusing an independence request at 80 autonomy must create an independence war. The independence peace clause must only be available in that subject's war against its overlord.
+- Refusing an independence request at 80 autonomy must create an independence war with non-overlapping subject and overlord coalitions, even when they share another active war. The existing war must remain unchanged. The independence peace clause must only be available in that subject's war against its overlord.
 - A participant's elimination must not automatically invalidate an otherwise viable peace proposal.
 - The war panel must summarize visible land attacks, transport landings, hostile warships near the player's territory, and nuclear weapons directed at the player or their territory.
 
@@ -34,7 +34,7 @@ The regular war tick checks living participants on both sides. When either side 
 
 ### Independence flow
 
-At 80 autonomy, an overlord's rejection of an independence request starts a special independence war between the subject and the overlord's side without silently releasing the subject first. This special war separates the subject coalition from the overlord coalition while the subject relationship remains pending. At 100 autonomy, the existing peaceful declaration remains available. The independence peace clause validates only when the named subject is alive, still a subject of its current overlord, the subject joined that war with the existing `independence` join reason, and the subject and overlord are on opposing sides of that same active war. Accepting that clause releases the subject and settles the war under the existing truce rules.
+At 80 autonomy, an overlord's rejection of an independence request starts a special independence war between the subject and the overlord's side without silently releasing the subject first. This special war separates the subject coalition from the overlord coalition while the subject relationship remains pending. Subject-side teammates must not also appear on the overlord side. Sharing an unrelated war with the overlord does not suppress independence; that existing war remains unchanged. At 100 autonomy, the existing peaceful declaration remains available. The independence peace clause validates only when the named subject is alive, still a subject of its current overlord, the subject joined that war with the existing `independence` join reason, and the subject and overlord are on opposing sides of that same active war. Accepting that clause releases the subject and settles the war under the existing truce rules.
 
 ### Text-first right-click menu
 
@@ -58,7 +58,7 @@ Build the threat summary from data already delivered to the current client. Grou
 - An arriving transport cannot take land that is now friendly or covered by a truce; valid hostile landings still resolve normally.
 - A puppet can defend its overlord, and an accepted ally call includes eligible teammates and subjects exactly once.
 - Eliminating every participant on one side ends the war and prevents later calls or peace actions from reopening it.
-- An 80-autonomy refusal creates an independence war; a normal unrelated war rejects an independence clause; a valid independence treaty releases the subject.
+- An 80-autonomy refusal creates an independence war with its subject team only on the subject side, including while that coalition shares a separate active war with the overlord; a normal unrelated war rejects an independence clause; a valid independence treaty releases the subject.
 - Eliminating one signer preserves the peace proposal for surviving signers, while eliminating an entire side ends it.
 - The panel reports all four visible threat classes and omits inactive, retreating, or hidden threats.
 - The text menu exposes every currently supported right-click action with its applicable disabled state and reason, works at viewport edges, and supports pointer and keyboard dismissal/navigation.

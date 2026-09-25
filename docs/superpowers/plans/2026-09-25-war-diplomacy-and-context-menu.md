@@ -36,6 +36,7 @@ Before Task 1, run the focused existing regression suites and the full `npm test
 - A call-to-arms recipient with a teammate or subject already on the opposing side must not split a protected coalition or duplicate a participant. (Task 2: `rejects a coalition that conflicts with the opposing side`.)
 - A dead signer must not block surviving signatures, but eliminating an entire side must end the war and invalidate its pending proposal. (Task 3: `removes a dead signer and settles on surviving approvals`; `ends when either side has no living participants`.)
 - A surviving signer can answer even if another signer was just eliminated and diplomacy has not ticked yet. (Task 3: `a live signer can answer before the next diplomacy tick prunes the dead signer`.)
+- A subject coalition member must not appear on both sides, and sharing a separate active war with the overlord must not swallow a rejected 80-autonomy independence request. (Task 4: `starts an independence war with the subject's team on the subject side`; `starts an independence war while the subject and overlord share another war`.)
 - Threat rows must omit inactive, retreating, and non-visible units while preserving transport, warship, and nuclear warnings. (Task 5: `summarizes active visible threats by class`.)
 
 ---
@@ -312,7 +313,7 @@ git commit -m "fix: resolve wars and peace offers after elimination"
 
 - Produces: `WarDiplomacy.beginIndependenceWar(subject: Player, overlord: Player): number | null`, which creates/reuses a war with the subject coalition on one side and the overlord coalition on the other, marking the subject participant with reason `independence`; `isInIndependenceWar(subject, overlord)` is the guarded combat predicate used by puppet target selection.
 - Consumes: existing `WarClause` shape `{ kind: "independence"; subjectId: PlayerID }`; no transport schema change.
-- Add private helpers `expandIndependenceSubjectSide(subject, overlord)`, `expandIndependenceOverlordSide(overlord, subject)`, `canIndependenceSidesFight(subjectSide, overlordSide, subject, overlord)`, and `createWar(attacker, defender, attackerSide, defenderSide, attackerReason)`; `createWar` creates snapshots and baselines from already validated memberships.
+- Add private helpers `expandIndependenceSubjectSide(subject, overlord)`, `expandIndependenceOverlordSide(overlord, subjectSide)`, `canIndependenceSidesFight(subjectSide, overlordSide, subject, overlord)`, and `createWar(attacker, defender, attackerSide, defenderSide, attackerReason)`; `createWar` creates snapshots and baselines from already validated memberships.
 - Add private `participantReason(war, playerID): WarJoinReason | null` so clause validation and combat authorization use the snapshot join reason.
 
 - [x] **Step 1: Update the 80-autonomy rejection test** in `tests/PlayerImpl.test.ts`. After rejecting the request, assert the subject remains a puppet and a war exists with the subject and overlord on opposing sides; preserve the separate 100-autonomy peaceful declaration assertion.
@@ -320,6 +321,8 @@ git commit -m "fix: resolve wars and peace offers after elimination"
 - [x] **Step 2: Add a combat eligibility assertion** for the new war: the subject may attack its overlord only while the active independence war places them on opposing sides; unrelated puppet offensives remain blocked.
 
 - [x] **Step 3: Add war-clause tests** in `tests/WarDiplomacy.test.ts`: a subject and overlord who merely share a side in an ordinary war cannot use the independence clause; a proposal in their active independence war releases the subject only after all required signatures accept.
+
+- [x] **Step 3a: Cover non-overlapping subject coalitions and concurrent wars.** Verify subject teammates appear only on the subject side, and rejecting an independence request while the subject and overlord share another war creates a separate conflict without ending or changing that existing war.
 
 - [x] **Step 4: Run the focused independence tests and observe the current failures.**
 
@@ -338,7 +341,7 @@ if (
   this.isIndependenceWarPair(existing, subject, overlord)
 ) return existing.id;
   const subjectSide = this.expandIndependenceSubjectSide(subject, overlord);
-  const overlordSide = this.expandIndependenceOverlordSide(overlord, subject);
+  const overlordSide = this.expandIndependenceOverlordSide(overlord, subjectSide);
   if (!this.canIndependenceSidesFight(subjectSide, overlordSide, subject, overlord)) return null;
   return this.createWar(subject, overlord, subjectSide, overlordSide, "independence", "defender");
 }
@@ -630,14 +633,14 @@ Expected: both commands exit 0.
 
 - [x] **Step 3: Run the full `npm test` suite** because the earlier review explicitly identified it as not green; record and resolve failures caused by this change, and report any confirmed baseline failures separately.
 
-Full-suite result: `npm test` did not finish green. The run reproduced the baseline `localStorage`-unavailable client failures and stalled in `tests/server/GameApiCors.test.ts` (7 request timeouts) and `tests/server/WorkerPathPrefix.test.ts` (4 request timeouts); it was interrupted after those suites stopped making progress. The run also caught an English translation-key ordering regression from this branch; that was fixed, and `tests/EnJsonSorted.test.ts` now passes. The final focused regression group passes 105 tests across 10 files.
+Full-suite result: Under the bundled Node 24 runtime, the exact `npm test` script passed: the main run reported 518/518 files and 6737/6737 tests; its server-only rerun reported 71/71 files and 777/777 tests. The payment migration tests now stub a valid cosmetics catalog and reset its cache per test, so subscription-tier checks do not depend on a network fetch.
 
 - [x] **Step 4: Review the final diff** with `git diff origin/main...HEAD`, inspect the worktree status, and verify that no resource-request, ally-support, or alternate settlement changes were pulled in.
 
-- [x] **Step 5: Push the completed branch to GitHub.**
+- [ ] **Step 5: Push the completed branch to GitHub.**
 
 ```bash
 git push -u origin codex/war-diplomacy-context-menu
 ```
 
-Expected: the remote branch contains the design, plan, and implementation commits. Report the branch and compare URL in the final response.
+Not completed: an automatic approval review rejected GitHub publication because the destination had not been explicitly authorized. The branch remains local; do not retry publication without that authorization.

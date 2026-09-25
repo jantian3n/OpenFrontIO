@@ -403,6 +403,110 @@ describe("war diplomacy offers and settlements", () => {
     expect(diplomacy.getWar(warId!)?.status).toBe("truce");
   });
 
+  test("starts an independence war with the subject's team on the subject side", async () => {
+    const game = await setup("plains");
+    const overlord = addPlayer(
+      game,
+      "overlord",
+      PlayerType.Human,
+      ColoredTeams.Blue,
+    );
+    const subject = addPlayer(
+      game,
+      "subject",
+      PlayerType.Human,
+      ColoredTeams.Red,
+    );
+    const teammate = addPlayer(
+      game,
+      "subject-teammate",
+      PlayerType.Human,
+      ColoredTeams.Red,
+    );
+    overlord.conquer(game.ref(0, 0));
+    for (let x = 1; x <= 20; x++) overlord.conquer(game.ref(x, 0));
+    subject.conquer(game.ref(20, 20));
+    teammate.conquer(game.ref(21, 20));
+    overlord.setTroops(100_000);
+    subject.setTroops(1);
+    expect(overlord.demandSubjugation(subject)).toBe(true);
+    expect(subject.acceptSubjectRequest(overlord, "subjugation")).toBe(true);
+    (subject as any)._subjectInfo.autonomy = 80;
+    expect(subject.requestIndependence(overlord)).toBe(true);
+
+    expect(overlord.rejectSubjectRequest(subject, "independence")).toBe(true);
+
+    const war = game.warDiplomacy().warsFor(subject)[0];
+    expect(war).toBeDefined();
+    expect(war!.sides[0].participants.map((participant) => participant.playerID)).toContain(
+      teammate.id(),
+    );
+    expect(war!.sides[1].participants.map((participant) => participant.playerID)).not.toContain(
+      teammate.id(),
+    );
+  });
+
+  test("starts an independence war while the subject and overlord share another war", async () => {
+    const game = await setup("plains");
+    const overlord = addPlayer(
+      game,
+      "overlord",
+      PlayerType.Human,
+      ColoredTeams.Blue,
+    );
+    const subject = addPlayer(
+      game,
+      "subject",
+      PlayerType.Human,
+      ColoredTeams.Red,
+    );
+    const enemy = addPlayer(
+      game,
+      "enemy",
+      PlayerType.Human,
+      ColoredTeams.Green,
+    );
+    overlord.conquer(game.ref(0, 0));
+    for (let x = 1; x <= 20; x++) overlord.conquer(game.ref(x, 0));
+    subject.conquer(game.ref(20, 20));
+    enemy.conquer(game.ref(40, 40));
+    overlord.setTroops(100_000);
+    subject.setTroops(1);
+    expect(overlord.demandSubjugation(subject)).toBe(true);
+    expect(subject.acceptSubjectRequest(overlord, "subjugation")).toBe(true);
+
+    const diplomacy = game.warDiplomacy();
+    const existingWarID = diplomacy.beginHostileAction(overlord, enemy)!;
+    expect(diplomacy.getWar(existingWarID)!.sides[0].participants).toContainEqual(
+      expect.objectContaining({ playerID: subject.id() }),
+    );
+    (subject as any)._subjectInfo.autonomy = 80;
+    expect(subject.requestIndependence(overlord)).toBe(true);
+    expect(overlord.rejectSubjectRequest(subject, "independence")).toBe(true);
+
+    const independenceWar = diplomacy
+      .warsFor(subject)
+      .find(
+        (war) =>
+          war.id !== existingWarID &&
+          war.sides.some((side) =>
+            side.participants.some(
+              (participant) =>
+                participant.playerID === subject.id() &&
+                participant.reason === "independence",
+            ),
+          ),
+      );
+    expect(independenceWar).toBeDefined();
+    expect(independenceWar!.sides[0].participants).toContainEqual(
+      expect.objectContaining({ playerID: subject.id() }),
+    );
+    expect(independenceWar!.sides[1].participants).toContainEqual(
+      expect.objectContaining({ playerID: overlord.id() }),
+    );
+    expect(diplomacy.getWar(existingWarID)?.status).toBe("active");
+  });
+
   test("expired proposals enter a deterministic cooldown and truce ends on its deadline", async () => {
     const { game, diplomacy, warId, attacker, defender } = await makeWar();
     const proposalId = diplomacy.proposePeace(warId, attacker, {
