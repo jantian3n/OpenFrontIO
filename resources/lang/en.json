@@ -513,6 +513,45 @@
     "target_dead": "Target eliminated",
     "target_dead_note": "You can't send resources to an eliminated player."
   },
+  "context_menu": {
+    "action": {
+      "alliance_request": "Request alliance",
+      "attack_now": "Attack",
+      "attack_options": "Military options",
+      "boat": "Launch transport",
+      "break_alliance": "End alliance",
+      "build": "Build structure",
+      "delete": "Delete nearby structure",
+      "donate_gold": "Send gold",
+      "donate_troops": "Send troops",
+      "extend_alliance": "Extend alliance",
+      "info": "Player information",
+      "spawn": "Spawn here",
+      "start_trade": "Start trade",
+      "stop_trade": "Stop trade",
+      "target_player": "Target player"
+    },
+    "actions": "Actions",
+    "cooldown": "Available in {seconds}s",
+    "group": {
+      "diplomacy": "Diplomacy",
+      "other": "Other",
+      "primary": "Primary actions",
+      "resources": "Resources",
+      "trade": "Trade"
+    },
+    "map_actions": "Map actions",
+    "reason": {
+      "attack_unavailable": "You cannot attack from this tile now.",
+      "donation_unavailable": "You cannot send troops to this player now.",
+      "land_required": "Choose a land tile.",
+      "random_spawn": "Use the random spawn control.",
+      "spawn_phase": "Available after the spawn phase.",
+      "tile_owned": "Choose unclaimed land to spawn.",
+      "transport_unavailable": "No transport ship is available.",
+      "unavailable": "Unavailable right now"
+    }
+  },
   "control_panel": {
     "allied_afk_neighbor_info": "You can attack disconnected players even if you are allied with them.",
     "army_limit_warning": "You're near your army limit! Consider sending troops to teammates.",
@@ -1076,6 +1115,13 @@
     "build_sam_desc": "Can intercept enemy missiles in its 100 pixel range. The SAM has a 7.5 second cooldown.",
     "build_silo_desc": "Allows launching missiles.",
     "build_warship_desc": "Patrols in an area, capturing enemy trade ships and destroying their Boats (transport ships) and Warships. Spawns from the nearest Port and patrols the area you first clicked to build it. You can control Warships by attack-clicking on them (see action Attack under Hotkeys) and then attack-clicking the new area you want them to move to. Warships can level up (max level 3) by capturing enemy trade ships and destroying their transport boats and Warships. Leveling up increases the Warship's damage and health.",
+    "context_menu_boat": "Launch a transport ship when one is available for the selected location.",
+    "context_menu_build": "Attack options and construction choices are shown as labeled lists, with upgrade amounts in a submenu.",
+    "context_menu_desc": "Right-click (or tap on mobile) to open the text action menu for a tile or player. Choose a labeled action or open a submenu. Unavailable actions include a short explanation; Escape or a click outside closes the menu.",
+    "context_menu_diplomacy": "Alliance actions and trade controls appear together in the diplomacy and trade groups.",
+    "context_menu_keyboard": "Use the arrow keys to move through actions, Enter to choose, and Escape to go back or close.",
+    "context_menu_resources": "Send troops or gold to an eligible ally from the resources group.",
+    "context_menu_title": "Context actions",
     "drag": "drag",
     "exit_confirmation": "Are you sure you want to exit the game?",
     "game_id_tooltip": "Game ID",
@@ -1107,13 +1153,6 @@
     "option_speed": "Speed - Adjust the game speed. Unavailable in public games.",
     "option_timer": "Timer - Time passed since the start of the game.",
     "player_icons": "Player icons",
-    "context_menu_title": "Context actions",
-    "context_menu_desc": "Right-click (or tap on mobile) to open the text action menu for a tile or player. Choose a labeled action or open a submenu. Unavailable actions include a short explanation; Escape or a click outside closes the menu.",
-    "context_menu_build": "Attack options and construction choices are shown as labeled lists, with upgrade amounts in a submenu.",
-    "context_menu_boat": "Launch a transport ship when one is available for the selected location.",
-    "context_menu_diplomacy": "Alliance actions and trade controls appear together in the diplomacy and trade groups.",
-    "context_menu_resources": "Send troops or gold to an eligible ally from the resources group.",
-    "context_menu_keyboard": "Use the arrow keys to move through actions, Enter to choose, and Escape to go back or close.",
     "table_action": "Action",
     "table_key": "Key",
     "troubleshooting_desc": "If you experience performance issues, crashes, or other problems while playing OpenFront, please visit our Troubleshooting page for help diagnosing and fixing common issues:",
@@ -2378,45 +2417,6 @@
     "verified_use_custom": "Switch back to a custom name",
     "verified_use_hint": "Play under your verified account name"
   },
-  "context_menu": {
-    "actions": "Actions",
-    "map_actions": "Map actions",
-    "group": {
-      "primary": "Primary actions",
-      "diplomacy": "Diplomacy",
-      "resources": "Resources",
-      "trade": "Trade",
-      "other": "Other"
-    },
-    "action": {
-      "info": "Player information",
-      "attack_options": "Military options",
-      "attack_now": "Attack",
-      "spawn": "Spawn here",
-      "build": "Build structure",
-      "boat": "Launch transport",
-      "delete": "Delete nearby structure",
-      "alliance_request": "Request alliance",
-      "extend_alliance": "Extend alliance",
-      "break_alliance": "End alliance",
-      "donate_gold": "Send gold",
-      "donate_troops": "Send troops",
-      "start_trade": "Start trade",
-      "stop_trade": "Stop trade",
-      "target_player": "Target player"
-    },
-    "reason": {
-      "unavailable": "Unavailable right now",
-      "spawn_phase": "Available after the spawn phase.",
-      "land_required": "Choose a land tile.",
-      "random_spawn": "Use the random spawn control.",
-      "tile_owned": "Choose unclaimed land to spawn.",
-      "transport_unavailable": "No transport ship is available.",
-      "donation_unavailable": "You cannot send troops to this player now.",
-      "attack_unavailable": "You cannot attack from this tile now."
-    },
-    "cooldown": "Available in {seconds}s"
-  },
   "war_panel": {
     "accept": "Accept",
     "amount": "Gold",
@@ -2451,6 +2451,7 @@
     "land_attacks": "Land attacks: {count} ({troops} troops)",
     "landings": "Transport landings: {count}",
     "no_visible_threats": "No visible threats.",
+    "nukes": "Nuclear strikes: {count}",
     "payer": "Payer",
     "pending_responses": "Pending: {count}",
     "piracy_income": "Piracy income",
@@ -2491,9 +2492,8 @@
     "tribute_commitments": "Puppet tribute rates",
     "truce": "Truce ends in",
     "truce_time": "{time} remaining",
-    "warships": "Hostile warships: {count}",
-    "nukes": "Nuclear strikes: {count}",
-    "war_number": "War {number}"
+    "war_number": "War {number}",
+    "warships": "Hostile warships: {count}"
   },
   "win_modal": {
     "died": "You died",
