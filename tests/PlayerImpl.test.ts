@@ -1,13 +1,20 @@
 import {
+  ColoredTeams,
   Game,
   Player,
   PlayerInfo,
   PlayerType,
   Relation,
   SubjectRelationKind,
+  Team,
   UnitType,
 } from "../src/core/game/Game";
+import { GameImpl } from "../src/core/game/GameImpl";
 import { setup } from "./util/Setup";
+
+function addPlayerWithTeam(game: Game, info: PlayerInfo, team?: Team): Player {
+  return (game as GameImpl).addPlayer(info, team);
+}
 
 let game: Game;
 let player: Player;
@@ -335,6 +342,40 @@ describe("PlayerImpl", () => {
       expect(other.isSubject()).toBe(false);
       expect(player.isOverlordOf(other)).toBe(false);
       expect(other.relation(player)).not.toBe(Relation.Hostile);
+    });
+
+    test("puppets can fight every opposing participant in an independence war", async () => {
+      const warGame = await setup("plains");
+      const overlord = addPlayerWithTeam(
+        warGame,
+        new PlayerInfo("overlord", PlayerType.Human, null, "overlord"),
+        ColoredTeams.Red,
+      );
+      const overlordTeammate = addPlayerWithTeam(
+        warGame,
+        new PlayerInfo("overlordTeammate", PlayerType.Human, null, "overlord_teammate"),
+        ColoredTeams.Red,
+      );
+      const subject = addPlayerWithTeam(
+        warGame,
+        new PlayerInfo("subject", PlayerType.Human, null, "subject"),
+      );
+      overlord.conquer(warGame.ref(0, 0));
+      overlordTeammate.conquer(warGame.ref(40, 40));
+      subject.conquer(warGame.ref(50, 50));
+      overlord.addTroops(Math.max(100_000, subject.troops() * 5));
+      for (let x = 1; x <= 20; x++) overlord.conquer(warGame.ref(x, 0));
+
+      expect(overlord.demandSubjugation(subject)).toBe(true);
+      expect(subject.acceptSubjectRequest(overlord, "subjugation")).toBe(true);
+      (subject as any)._subjectInfo.autonomy = 80;
+      expect(subject.requestIndependence(overlord)).toBe(true);
+      expect(overlord.rejectSubjectRequest(subject, "independence")).toBe(
+        true,
+      );
+
+      expect(subject.canAttackPlayer(overlord)).toBe(true);
+      expect(subject.canAttackPlayer(overlordTeammate)).toBe(true);
     });
 
     test("an overlord can accept an independence request at 80 autonomy", () => {

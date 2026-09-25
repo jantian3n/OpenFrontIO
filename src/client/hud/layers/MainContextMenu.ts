@@ -2,7 +2,7 @@ import { EventBus } from "../../../core/EventBus";
 import { PlayerActions } from "../../../core/game/Game";
 import { TileRef } from "../../../core/game/GameMap";
 import { Controller } from "../../Controller";
-import { ContextMenuEvent } from "../../InputHandler";
+import { CloseViewEvent, ContextMenuEvent } from "../../InputHandler";
 import { TransformHandler } from "../../TransformHandler";
 import { UIState } from "../../UIState";
 import { GameView, PlayerView } from "../../view";
@@ -12,7 +12,10 @@ import { MenuElementParams, rootMenuElement } from "./ContextMenuElements";
 import { EmojiTable } from "./EmojiTable";
 import { PlayerActionHandler } from "./PlayerActionHandler";
 import { PlayerPanel } from "./PlayerPanel";
-import { CloseContextMenuEvent, TextContextMenu } from "./TextContextMenu";
+import {
+  CloseContextMenuEvent,
+  TextContextMenu,
+} from "./TextContextMenu";
 
 function emptyPlayerActions(): PlayerActions {
   return {
@@ -29,6 +32,7 @@ export class MainContextMenu implements Controller {
   private chatIntegration: ChatIntegration;
 
   private clickedTile: TileRef | null = null;
+  private actionRequestID = 0;
 
   getTickIntervalMs() {
     return 500;
@@ -55,12 +59,19 @@ export class MainContextMenu implements Controller {
 
   init() {
     this.contextMenu.init();
+    this.eventBus.on(CloseContextMenuEvent, () =>
+      this.invalidateActionRequests(),
+    );
+    this.eventBus.on(CloseViewEvent, () => this.invalidateActionRequests());
     this.eventBus.on(ContextMenuEvent, (event) => {
+      const requestID = ++this.actionRequestID;
+      this.contextMenu.hide();
       const worldCoords = this.transformHandler.screenToWorldCoordinates(
         event.x,
         event.y,
       );
       if (!this.game.isValidCoord(worldCoords.x, worldCoords.y)) {
+        this.clickedTile = null;
         return;
       }
       const clickedTile = this.game.ref(worldCoords.x, worldCoords.y);
@@ -69,6 +80,7 @@ export class MainContextMenu implements Controller {
       // Spectators (replay, dead, pre-spawn): skip actions and open
       // the read-only PlayerPanel directly when right-clicking on a player.
       if (this.game.isSpectator()) {
+        this.clickedTile = null;
         if (this.game.owner(clickedTile).isPlayer()) {
           this.playerPanel.show(emptyPlayerActions(), clickedTile);
         }
@@ -76,10 +88,19 @@ export class MainContextMenu implements Controller {
       }
 
       const myPlayer = this.game.myPlayer();
-      if (myPlayer === null) return;
+      if (myPlayer === null) {
+        this.clickedTile = null;
+        return;
+      }
       myPlayer
         .actions(clickedTile)
         .then((actions) => {
+          if (
+            requestID !== this.actionRequestID ||
+            this.clickedTile !== clickedTile
+          ) {
+            return;
+          }
           this.updatePlayerActions(
             myPlayer,
             actions,
@@ -89,9 +110,16 @@ export class MainContextMenu implements Controller {
           );
         })
         .catch((error) => {
-          console.warn("Failed to load context menu actions:", error);
+          if (requestID === this.actionRequestID) {
+            console.warn("Failed to load context menu actions:", error);
+          }
         });
     });
+  }
+
+  private invalidateActionRequests() {
+    this.actionRequestID++;
+    this.clickedTile = null;
   }
 
   private async updatePlayerActions(
@@ -137,19 +165,34 @@ export class MainContextMenu implements Controller {
   async tick() {
     if (!this.contextMenu.isVisible() || this.clickedTile === null) return;
     const myPlayer = this.game.myPlayer();
-    if (myPlayer === null) return;
+    if (myPlayer === null) {
+      this.invalidateActionRequests();
+      this.contextMenu.hide();
+      return;
+    }
     const tile = this.clickedTile;
+    const requestID = ++this.actionRequestID;
     myPlayer
       .actions(tile)
       .then((actions) => {
+        if (
+          requestID !== this.actionRequestID ||
+          this.clickedTile !== tile ||
+          !this.contextMenu.isVisible()
+        ) {
+          return;
+        }
         this.updatePlayerActions(myPlayer, actions, tile);
       })
       .catch((error) => {
-        console.warn("Failed to refresh context menu actions:", error);
+        if (requestID === this.actionRequestID) {
+          console.warn("Failed to refresh context menu actions:", error);
+        }
       });
   }
 
   closeMenu() {
+    this.invalidateActionRequests();
     if (this.contextMenu.isVisible()) this.contextMenu.hide();
     this.eventBus.emit(new CloseContextMenuEvent());
 

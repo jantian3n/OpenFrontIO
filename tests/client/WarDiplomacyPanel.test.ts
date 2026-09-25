@@ -25,6 +25,8 @@ function player(
     isFriendly: (other: PlayerView) =>
       other.id() !== id && friendlyIDs.includes(other.id()),
     isAlive: () => true,
+    isSubject: () => false,
+    isOnSameTeam: () => false,
     gold: () => BigInt(gold),
     goldEarned: () => 250,
     tradeGold: () => 30,
@@ -242,6 +244,137 @@ describe("WarDiplomacyPanel", () => {
     expect(panel.textContent).toContain("war_panel.landings|1");
     expect(panel.textContent).toContain("war_panel.warships|2");
     expect(panel.textContent).toContain("war_panel.nukes|1");
+  });
+
+  it("offers the independence clause when the puppet and overlord are enemies", async () => {
+    const overlord = player("p2", "Boreal");
+    const subject = {
+      ...player("p1", "Aster"),
+      isPuppet: () => true,
+      overlord: () => overlord,
+    } as unknown as PlayerView;
+    const independenceWar = war();
+    independenceWar.sides[0].participants[0].reason = "independence";
+    const { panel, eventBus } = setupPanel([independenceWar], subject);
+    const sent: unknown[] = [];
+    eventBus.on(SendWarDiplomacyIntentEvent, (event) =>
+      sent.push(event.intent),
+    );
+    await panel.updateComplete;
+    panel
+      .querySelector<HTMLButtonElement>(
+        "[aria-controls='war-diplomacy-content']",
+      )!
+      .click();
+    await panel.updateComplete;
+
+    const clauseSelect = panel.querySelector<HTMLSelectElement>(
+      "select[name='clause-kind']",
+    )!;
+    const independenceOption = clauseSelect.querySelector<HTMLOptionElement>(
+      "option[value='independence']",
+    )!;
+    expect(independenceOption.disabled).toBe(false);
+
+    clauseSelect.value = "independence";
+    clauseSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    await panel.updateComplete;
+    expect(panel.textContent).toContain("war_panel.independence_clause");
+    expect(panel.textContent).not.toContain("war_panel.error_independence");
+    panel
+      .querySelector<HTMLFormElement>("form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    expect(sent).toContainEqual({
+      type: "war_propose_peace",
+      warId: 7,
+      clause: { kind: "independence", subjectId: "p1" },
+    });
+  });
+
+  it("rejects a puppet peace term whose target is already a subject", async () => {
+    const proposer = player("p1", "Aster");
+    const target = {
+      ...player("p2", "Boreal"),
+      isSubject: () => true,
+    } as unknown as PlayerView;
+    const eligibleWar = war();
+    eligibleWar.sides[0].score.total = 8_000;
+    eligibleWar.sides[1].score.total = 0;
+    const { panel, eventBus } = setupPanel(
+      [eligibleWar],
+      proposer,
+      { player: (id: string) => (id === "p1" ? proposer : target) },
+    );
+    const sent: unknown[] = [];
+    eventBus.on(SendWarDiplomacyIntentEvent, (event) =>
+      sent.push(event.intent),
+    );
+    await panel.updateComplete;
+    panel
+      .querySelector<HTMLButtonElement>(
+        "[aria-controls='war-diplomacy-content']",
+      )!
+      .click();
+    await panel.updateComplete;
+
+    const kindSelect = panel.querySelector<HTMLSelectElement>(
+      "select[name='clause-kind']",
+    )!;
+    kindSelect.value = "puppet";
+    kindSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    await panel.updateComplete;
+    panel
+      .querySelector<HTMLFormElement>("form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+
+    expect(sent).toEqual([]);
+    expect(panel.textContent).toContain("war_panel.error_puppet");
+  });
+
+  it("submits a puppet peace term for an eligible opposing pair", async () => {
+    const overlord = player("p1", "Aster");
+    const target = player("p2", "Boreal");
+    const eligibleWar = war();
+    eligibleWar.sides[0].score.total = 8_000;
+    eligibleWar.sides[1].score.total = 0;
+    const { panel, eventBus } = setupPanel(
+      [eligibleWar],
+      overlord,
+      { player: (id: string) => (id === "p1" ? overlord : target) },
+    );
+    const sent: unknown[] = [];
+    eventBus.on(SendWarDiplomacyIntentEvent, (event) =>
+      sent.push(event.intent),
+    );
+    await panel.updateComplete;
+    panel
+      .querySelector<HTMLButtonElement>(
+        "[aria-controls='war-diplomacy-content']",
+      )!
+      .click();
+    await panel.updateComplete;
+
+    const kindSelect = panel.querySelector<HTMLSelectElement>(
+      "select[name='clause-kind']",
+    )!;
+    kindSelect.value = "puppet";
+    kindSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    await panel.updateComplete;
+    expect(
+      panel.querySelector("select[name='puppet-target'] option[value='p2']"),
+    ).not.toBeNull();
+    expect(
+      panel.querySelector("select[name='puppet-overlord'] option[value='p1']"),
+    ).not.toBeNull();
+    panel
+      .querySelector<HTMLFormElement>("form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+
+    expect(sent).toContainEqual({
+      type: "war_propose_peace",
+      warId: 7,
+      clause: { kind: "puppet", targetId: "p2", overlordId: "p1" },
+    });
   });
 
   it("sends call-to-arms accept and reject intents", async () => {

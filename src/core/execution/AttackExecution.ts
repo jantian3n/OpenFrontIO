@@ -66,6 +66,7 @@ export class AttackExecution implements Execution {
 
     if (this._targetID !== null && !mg.hasPlayer(this._targetID)) {
       console.warn(`target ${this._targetID} not found`);
+      this.refundLoadedBoatTroops();
       this.active = false;
       return;
     }
@@ -79,6 +80,7 @@ export class AttackExecution implements Execution {
 
     if (this._owner === this.target) {
       console.error(`Player ${this._owner} cannot attack itself`);
+      this.refundLoadedBoatTroops();
       this.active = false;
       return;
     }
@@ -89,6 +91,7 @@ export class AttackExecution implements Execution {
         !this._owner.canAttackPlayer(this.target) &&
         !diplomacy.canAttackDisconnectedTeammate(this._owner, this.target)
       ) {
+        this.refundLoadedBoatTroops();
         this.active = false;
         return;
       }
@@ -143,7 +146,9 @@ export class AttackExecution implements Execution {
         if (
           !diplomacy.canAttackDisconnectedTeammate(this._owner, targetPlayer)
         ) {
-          if (this.removeTroops) this._owner.addTroops(this.startTroops);
+          if (this.removeTroops || this.sourceTile !== null) {
+            this._owner.addTroops(this.startTroops);
+          }
           this.attack.delete();
           this.active = false;
           return;
@@ -217,6 +222,16 @@ export class AttackExecution implements Execution {
           assertNever(difficulty);
       }
       this.target.updateRelation(this._owner, relationChange);
+    }
+  }
+
+  private refundLoadedBoatTroops(): void {
+    if (
+      !this.removeTroops &&
+      this.sourceTile !== null &&
+      this.startTroops !== null
+    ) {
+      this._owner.addTroops(this.startTroops);
     }
   }
 

@@ -1504,11 +1504,7 @@ export class PlayerImpl implements Player {
     if (!this.isPuppet()) return true;
 
     const overlord = this._overlord;
-    if (
-      overlord !== null &&
-      other === overlord &&
-      this.mg.warDiplomacy().isInIndependenceWar(this, overlord)
-    ) {
+    if (this.mg.warDiplomacy().canFightInIndependenceWar(this, other)) {
       return true;
     }
 

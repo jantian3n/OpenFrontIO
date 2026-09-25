@@ -233,6 +233,28 @@ export class WarDiplomacy {
     );
   }
 
+  canFightInIndependenceWar(attacker: Player, target: Player): boolean {
+    const war = this.findWarBetween(attacker.id(), target.id());
+    if (
+      war === undefined ||
+      (war.status !== "active" && war.status !== "peacePending")
+    ) {
+      return false;
+    }
+    const attackerSide = this.sideIndex(war, attacker.id());
+    const targetSide = this.sideIndex(war, target.id());
+    if (
+      attackerSide === null ||
+      targetSide === null ||
+      attackerSide === targetSide
+    ) {
+      return false;
+    }
+    return war.sides.some((side) =>
+      side.participants.some((participant) => participant.reason === "independence"),
+    );
+  }
+
   private createWar(
     attacker: Player,
     defender: Player,

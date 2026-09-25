@@ -54,6 +54,36 @@ describe("war combat integration", () => {
     expect(attacker.incomingAllianceRequests()).toHaveLength(1);
   });
 
+  test("returns boat troops when diplomacy blocks the landing attack", async () => {
+    const game = await setup("plains", {}, [
+      new PlayerInfo("attacker", PlayerType.Human, null, "attacker"),
+      new PlayerInfo("defender", PlayerType.Human, null, "defender"),
+    ]);
+    const attacker = game.player("attacker");
+    const defender = game.player("defender");
+    const landing = game.ref(0, 0);
+    attacker.conquer(landing);
+    defender.conquer(game.ref(1, 0));
+    attacker.addTroops(1_000);
+    const carriedTroops = attacker.removeTroops(250);
+    const troopsAfterLoading = attacker.troops();
+    attacker.createAllianceRequest(defender)?.accept();
+
+    game.addExecution(
+      new AttackExecution(
+        carriedTroops,
+        attacker,
+        defender.id(),
+        landing,
+        false,
+      ),
+    );
+    game.executeNextTick();
+
+    expect(attacker.troops()).toBe(troopsAfterLoading + carriedTroops);
+    expect(game.warDiplomacy().warsFor(attacker)).toEqual([]);
+  });
+
   test("same-team players cannot attack each other or create a war", async () => {
     const game = await setup("plains");
     const attacker = addPlayerWithTeam(

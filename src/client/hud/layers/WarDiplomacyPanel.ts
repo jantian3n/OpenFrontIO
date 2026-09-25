@@ -151,6 +151,54 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
     return side === -1 ? null : (side as 0 | 1);
   }
 
+  private canProposeIndependence(
+    war: WarSnapshot,
+    subject: PlayerView | null,
+  ): boolean {
+    if (!subject?.isPuppet()) return false;
+    const overlord = subject.overlord();
+    if (!overlord) return false;
+    const subjectSide = this.sideFor(war, subject.id());
+    const overlordSide = this.sideFor(war, overlord.id());
+    return (
+      subjectSide !== null &&
+      overlordSide !== null &&
+      subjectSide !== overlordSide &&
+      war.sides[subjectSide].participants.some(
+        (participant) =>
+          participant.playerID === subject.id() &&
+          participant.reason === "independence",
+      )
+    );
+  }
+
+  private canFormPuppetClause(
+    war: WarSnapshot,
+    targetID: string,
+    overlordID: string,
+  ): boolean {
+    if (targetID === overlordID) return false;
+    const target = this.player(targetID);
+    const overlord = this.player(overlordID);
+    if (!target || !overlord) return false;
+    const targetSide = this.sideFor(war, targetID);
+    const overlordSide = this.sideFor(war, overlordID);
+    return (
+      target.isAlive() &&
+      overlord.isAlive() &&
+      targetSide !== null &&
+      overlordSide !== null &&
+      targetSide !== overlordSide &&
+      war.sides[overlordSide].score.total -
+        war.sides[targetSide].score.total >=
+        WAR_PUPPET_SCORE_THRESHOLD &&
+      !target.isSubject() &&
+      target.subjects().length === 0 &&
+      !overlord.isSubject() &&
+      !target.isOnSameTeam(overlord)
+    );
+  }
+
   private send(
     intent: ConstructorParameters<typeof SendWarDiplomacyIntentEvent>[0],
     key: string,
@@ -220,18 +268,10 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
     } else if (kind === "puppet") {
       const targetId = String(data.get("puppet-target"));
       const overlordId = String(data.get("puppet-overlord"));
-      const targetSide = this.sideFor(war, targetId);
-      const overlordSide = this.sideFor(war, overlordId);
       if (
         !targetId ||
         !overlordId ||
-        targetId === overlordId ||
-        targetSide === null ||
-        overlordSide === null ||
-        targetSide === overlordSide ||
-        war.sides[overlordSide].score.total -
-          war.sides[targetSide].score.total <
-          WAR_PUPPET_SCORE_THRESHOLD
+        !this.canFormPuppetClause(war, targetId, overlordId)
       ) {
         this.setError(war.id, "war_panel.error_puppet");
         return;
@@ -239,13 +279,7 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
       clause = { kind, targetId, overlordId };
     } else {
       const subject = this.game.myPlayer();
-      const overlord = subject?.overlord();
-      if (
-        !subject?.isPuppet() ||
-        !overlord ||
-        this.sideFor(war, subject.id()) === null ||
-        this.sideFor(war, subject.id()) !== this.sideFor(war, overlord.id())
-      ) {
+      if (!subject || !this.canProposeIndependence(war, subject)) {
         this.setError(war.id, "war_panel.error_independence");
         return;
       }
@@ -508,6 +542,22 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
       </div>`;
     }
     if (kind === "puppet") {
+      const eligibleTargets = war.sides[losingSide].participants.filter(
+        (target) =>
+          target.isAlive &&
+          war.sides[leadingSide].participants.some(
+            (overlord) =>
+              overlord.isAlive &&
+              this.canFormPuppetClause(war, target.playerID, overlord.playerID),
+          ),
+      );
+      const eligibleOverlords = war.sides[leadingSide].participants.filter(
+        (overlord) =>
+          overlord.isAlive &&
+          eligibleTargets.some((target) =>
+            this.canFormPuppetClause(war, target.playerID, overlord.playerID),
+          ),
+      );
       return html`<div class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
         <label class="text-xs text-zinc-300"
           >${translateText("war_panel.puppet_target")}
@@ -516,14 +566,12 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
             class="mt-1 min-h-11 w-full rounded-lg border border-white/10 bg-zinc-900 px-2 py-2 text-sm text-zinc-100"
             ?disabled=${!hasPuppetLead}
           >
-            ${war.sides[losingSide].participants
-              .filter((p) => p.isAlive)
-              .map(
-                (p) =>
-                  html`<option value=${p.playerID}>
-                    ${this.participantName(p.playerID)}
-                  </option>`,
-              )}
+            ${eligibleTargets.map(
+              (target) =>
+                html`<option value=${target.playerID}>
+                  ${this.participantName(target.playerID)}
+                </option>`,
+            )}
           </select>
         </label>
         <label class="text-xs text-zinc-300"
@@ -533,14 +581,12 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
             class="mt-1 min-h-11 w-full rounded-lg border border-white/10 bg-zinc-900 px-2 py-2 text-sm text-zinc-100"
             ?disabled=${!hasPuppetLead}
           >
-            ${war.sides[leadingSide].participants
-              .filter((p) => p.isAlive)
-              .map(
-                (p) =>
-                  html`<option value=${p.playerID}>
-                    ${this.participantName(p.playerID)}
-                  </option>`,
-              )}
+            ${eligibleOverlords.map(
+              (overlord) =>
+                html`<option value=${overlord.playerID}>
+                  ${this.participantName(overlord.playerID)}
+                </option>`,
+            )}
           </select>
         </label>
         ${!hasPuppetLead
@@ -550,15 +596,17 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
               })}
             </p>`
           : ""}
+        ${hasPuppetLead && eligibleTargets.length === 0
+          ? html`<p class="text-xs text-amber-200 sm:col-span-2">
+              ${translateText("war_panel.error_puppet")}
+            </p>`
+          : ""}
       </div>`;
     }
     if (kind === "independence") {
-      const my = this.game.myPlayer();
-      const available = Boolean(
-        my?.isPuppet() &&
-        my.overlord() &&
-        this.sideFor(war, my.id()) !== null &&
-        this.sideFor(war, my.id()) === this.sideFor(war, my.overlord()!.id()),
+      const available = this.canProposeIndependence(
+        war,
+        this.game.myPlayer(),
       );
       return html`<p
         class="mt-2 rounded-lg bg-white/5 px-3 py-2 text-xs text-zinc-300"
@@ -584,12 +632,7 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
     const hasPuppetLead =
       war.sides[leadingSide].score.total - war.sides[losingSide].score.total >=
       WAR_PUPPET_SCORE_THRESHOLD;
-    const overlord = my.overlord();
-    const hasIndependenceTerm = Boolean(
-      my.isPuppet() &&
-      overlord &&
-      this.sideFor(war, my.id()) === this.sideFor(war, overlord.id()),
-    );
+    const hasIndependenceTerm = this.canProposeIndependence(war, my);
     const kind = this.clauseKinds.get(war.id) ?? "whitePeace";
     const key = `peace-proposal:${war.id}`;
     return html`<form
