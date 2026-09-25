@@ -155,4 +155,9 @@ function performAttack(game: Game, attacker: Player, defender: Player) {
   do {
     game.executeNextTick();
   } while (attacker.outgoingAttacks().length > 0);
+
+  // A human conqueror pends the settlement below 100 tiles; these tests
+  // want the finished kill (gold transfer, elimination), so annex it the
+  // way a player — or the 300-tick timeout — would.
+  game.executeConquestSettle(attacker, defender, "annex");
 }

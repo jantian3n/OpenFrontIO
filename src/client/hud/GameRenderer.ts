@@ -25,6 +25,7 @@ import { AttacksDisplay } from "./layers/AttacksDisplay";
 import { BuildMenu } from "./layers/BuildMenu";
 import { ChatDisplay } from "./layers/ChatDisplay";
 import { ChatModal } from "./layers/ChatModal";
+import { ConquestSettlementModal } from "./layers/ConquestSettlementModal";
 import { ControlPanel } from "./layers/ControlPanel";
 import { EmojiTable } from "./layers/EmojiTable";
 import { EventsDisplay } from "./layers/EventsDisplay";
@@ -249,6 +250,15 @@ export function createRenderer(
   warDiplomacyPanel.game = game;
   warDiplomacyPanel.initEventBus(eventBus);
 
+  const conquestSettlementModal = document.querySelector(
+    "conquest-settlement-modal",
+  ) as ConquestSettlementModal;
+  if (!(conquestSettlementModal instanceof ConquestSettlementModal)) {
+    console.error("conquest settlement modal not found");
+  }
+  conquestSettlementModal.game = game;
+  conquestSettlementModal.initEventBus(eventBus);
+
   playerPanel.setRole(playerRole);
 
   const chatModal = document.querySelector("chat-modal") as ChatModal;
@@ -368,6 +378,7 @@ export function createRenderer(
     settingsModal,
     playerPanel,
     warDiplomacyPanel,
+    conquestSettlementModal,
     headsUpMessage,
     multiTabModal,
     inGamePromo,

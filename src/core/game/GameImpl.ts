@@ -14,12 +14,15 @@ import {
   AllianceRequest,
   Cell,
   ColoredTeams,
+  ConquestSettlementDecision,
+  CONQUEST_SETTLEMENT_DURATION_TICKS,
   Duos,
   EmojiMessage,
   Execution,
   Game,
   GameMode,
   GameUpdates,
+  Gold,
   HumansVsNations,
   MessageType,
   MutableAlliance,
@@ -116,6 +119,12 @@ export class GameImpl implements Game {
   private _winner: Player | Team | null = null;
   private _waterManager: WaterManager;
   private _warDiplomacy: WarDiplomacy;
+  /** Conquest settlements awaiting the (human) conqueror's decision, keyed by
+   * the conquered player's ID. */
+  private _pendingConquests = new Map<
+    PlayerID,
+    { conquerorId: PlayerID; expiresAt: number }
+  >();
   private _sharedWaterCache: SharedWaterCache;
   private _teamGameSpawnAreas: TeamGameSpawnAreas | undefined;
   /** Tiles from nuke blast radii this tick, drained by the renderer. */
@@ -501,6 +510,7 @@ export class GameImpl implements Game {
     this.updates = createGameUpdatesMap();
     this.tileUpdatePairs.length = 0;
     this._warDiplomacy.tick();
+    this.processPendingConquests();
     this.execs.forEach((e) => {
       if (
         (!this.inSpawnPhase() || e.activeDuringSpawnPhase()) &&
@@ -640,7 +650,13 @@ export class GameImpl implements Game {
     this._players.forEach((p) => {
       hash += p.hash();
     });
-    return hash + this._warDiplomacy.hash();
+    hash += this._warDiplomacy.hash();
+    // Pending conquests are deterministic sim state; include them so a desync
+    // in the settlement pipeline is caught by the per-tick hash.
+    hash += simpleHash(
+      JSON.stringify(Array.from(this._pendingConquests.entries())),
+    );
+    return hash;
   }
 
   warDiplomacy(): WarDiplomacy {
@@ -1410,7 +1426,7 @@ export class GameImpl implements Game {
   sharedWaterComponents(player: Player): Set<number> | null {
     return this._sharedWaterCache.get(player);
   }
-  conquerPlayer(conqueror: Player, conquered: Player) {
+  conquerPlayer(conqueror: Player, conquered: Player): Gold {
     if (conquered.isDisconnected() && conqueror.isOnSameTeam(conquered)) {
       const ships = conquered
         .units()
@@ -1491,6 +1507,192 @@ export class GameImpl implements Game {
       conqueredId: conquered.id(),
       gold: goldCaptured,
     });
+    return goldCaptured;
+  }
+
+  startConquestSettle(conqueror: Player, conquered: Player): void {
+    if (this._pendingConquests.has(conquered.id())) return;
+    // A target already conquered down to zero tiles has nothing left to
+    // keep: settle on the spot. Pending would strand it — expiry drops dead
+    // targets without annexing and executeConquestSettle refuses dead
+    // sides, so the gold and kill stats would never transfer.
+    if (!conquered.isAlive()) {
+      this.conquerPlayer(conqueror, conquered);
+      return;
+    }
+    // Bots and nations keep the legacy behavior: immediate annexation.
+    if (
+      conqueror.type() === PlayerType.Bot ||
+      conqueror.type() === PlayerType.Nation
+    ) {
+      this.conquerPlayer(conqueror, conquered);
+      return;
+    }
+    const expiresAt = this.ticks() + CONQUEST_SETTLEMENT_DURATION_TICKS;
+    this._pendingConquests.set(conquered.id(), {
+      conquerorId: conqueror.id(),
+      expiresAt,
+    });
+    this.addUpdate({
+      type: GameUpdateType.ConquestPending,
+      conquerorId: conqueror.id(),
+      conqueredId: conquered.id(),
+      expiresAt,
+    });
+  }
+
+  hasPendingConquest(player: Player): boolean {
+    return this._pendingConquests.has(player.id());
+  }
+
+  executeConquestSettle(
+    conqueror: Player,
+    target: Player,
+    decision: ConquestSettlementDecision,
+    amount?: Gold,
+  ): void {
+    const pending = this._pendingConquests.get(target.id());
+    if (pending === undefined) return;
+    if (pending.conquerorId !== conqueror.id()) return;
+    // Mirror processPendingConquests: a dead side drops the settlement
+    // (expiry just releases the target instead of annexing it).
+    if (!conqueror.isAlive() || !target.isAlive()) return;
+    // At expiry the tick hook annexes; a same-tick intent must not race it.
+    if (this.ticks() >= pending.expiresAt) return;
+    this.settleConquest(conqueror, target, decision, amount);
+  }
+
+  private processPendingConquests(): void {
+    const now = this._ticks;
+    for (const [conqueredId, pending] of Array.from(
+      this._pendingConquests,
+    )) {
+      if (now < pending.expiresAt) continue;
+      const conqueror = this._players.get(pending.conquerorId);
+      const target = this._players.get(conqueredId);
+      this._pendingConquests.delete(conqueredId);
+      if (
+        conqueror === undefined ||
+        target === undefined ||
+        !conqueror.isAlive() ||
+        !target.isAlive()
+      ) {
+        continue;
+      }
+      // No decision in time: the conqueror takes it all.
+      this.settleConquest(conqueror, target, "annex", undefined);
+    }
+  }
+
+  private settleConquest(
+    conqueror: Player,
+    target: Player,
+    decision: ConquestSettlementDecision,
+    amount: Gold | undefined,
+  ): void {
+    let gold: Gold = 0n;
+    switch (decision) {
+      case "annex": {
+        gold = this.conquerPlayer(conqueror, target);
+        this.handOverConqueredTerritory(conqueror, target);
+        break;
+      }
+      case "puppet": {
+        if (!target.formPuppetFromPeace(conqueror)) {
+          // Keep the pending entry: the conqueror can pick another outcome or
+          // let it expire to annex.
+          console.warn(
+            `[settleConquest] puppet settlement failed for ${target.id()}`,
+          );
+          return;
+        }
+        break;
+      }
+      case "reparations": {
+        const requested = amount ?? 0n;
+        const clamped =
+          requested < 0n
+            ? 0n
+            : requested > target.gold()
+              ? target.gold()
+              : requested;
+        gold = target.removeGold(clamped);
+        conqueror.addGold(gold);
+        this.stats().goldWar(conqueror, target, gold);
+        break;
+      }
+      case "release":
+        break;
+    }
+    if (decision !== "annex") {
+      this._warDiplomacy.conquestTruce(conqueror, target);
+    }
+    this._pendingConquests.delete(target.id());
+    this.addUpdate({
+      type: GameUpdateType.ConquestSettled,
+      conquerorId: conqueror.id(),
+      conqueredId: target.id(),
+      decision,
+      gold,
+    });
+    const params: Record<string, string | number> = {
+      name: target.displayName(),
+    };
+    const messageKeyByDecision: Record<
+      ConquestSettlementDecision,
+      string
+    > = {
+      annex: "events_display.settled_conquest_annex",
+      puppet: "events_display.settled_conquest_puppet",
+      reparations: "events_display.settled_conquest_reparations",
+      release: "events_display.settled_conquest_release",
+    };
+    if (decision === "annex" || decision === "reparations") {
+      params.gold = renderNumber(gold);
+    }
+    this.displayMessage(
+      messageKeyByDecision[decision],
+      MessageType.CONQUERED_PLAYER,
+      conqueror.id(),
+      decision === "annex" || decision === "reparations" ? gold : undefined,
+      params,
+      undefined,
+      target.id(),
+    );
+  }
+
+  // Hands the conquered player's remaining tiles to the conqueror, then to any
+  // hostile neighbor (mirrors the distribution in AttackExecution's dead-
+  // defender path, which runs it inline at annex time).
+  private handOverConqueredTerritory(conqueror: Player, conquered: Player) {
+    const MAX_PASSES = 100;
+    for (let pass = 0; pass < MAX_PASSES; pass++) {
+      let progressed = false;
+      for (const tile of conquered.tiles()) {
+        let borders = false;
+        this.forEachNeighbor(tile, (t) => {
+          if (!borders && this.owner(t) === conqueror) {
+            borders = true;
+          }
+        });
+        if (borders) {
+          conqueror.conquer(tile);
+          progressed = true;
+        } else {
+          let captured = false;
+          this.forEachNeighbor(tile, (neighbor) => {
+            if (captured) return;
+            const no = this.owner(neighbor);
+            if (no.isPlayer() && no !== conquered && !no.isFriendly(conquered)) {
+              this.player(no.id()).conquer(tile);
+              captured = true;
+            }
+          });
+          if (captured) progressed = true;
+        }
+      }
+      if (!progressed) break;
+    }
   }
 }
 

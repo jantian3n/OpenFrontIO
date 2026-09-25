@@ -1,5 +1,10 @@
-import { AllPlayersStats, ClientID, Winner } from "../Schemas";
 import {
+  AllPlayersStats,
+  ClientID,
+  Winner,
+} from "../Schemas";
+import {
+  ConquestSettlementDecision,
   EmojiMessage,
   GameUpdates,
   Gold,
@@ -118,6 +123,8 @@ export enum GameUpdateType {
   ProtectionCall,
   ProtectionCallReply,
   War,
+  ConquestPending,
+  ConquestSettled,
 }
 
 export type GameUpdate =
@@ -146,11 +153,28 @@ export type GameUpdate =
   | DonateEventUpdate
   | SubjectRequestUpdate
   | SubjectRequestReplyUpdate
-  | WarUpdate;
+  | WarUpdate
+  | ConquestPendingUpdate
+  | ConquestSettledUpdate;
 
 export interface WarUpdate {
   type: GameUpdateType.War;
   war: WarSnapshot;
+}
+
+export interface ConquestPendingUpdate {
+  type: GameUpdateType.ConquestPending;
+  conquerorId: PlayerID;
+  conqueredId: PlayerID;
+  expiresAt: Tick;
+}
+
+export interface ConquestSettledUpdate {
+  type: GameUpdateType.ConquestSettled;
+  conquerorId: PlayerID;
+  conqueredId: PlayerID;
+  decision: ConquestSettlementDecision;
+  gold: Gold;
 }
 
 export interface BonusEventUpdate {

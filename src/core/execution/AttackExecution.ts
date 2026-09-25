@@ -324,6 +324,14 @@ export class AttackExecution implements Execution {
       return;
     }
 
+    if (targetPlayer && this.mg.hasPendingConquest(targetPlayer)) {
+      // The target's conquest settlement is pending: they keep their
+      // remaining territory until the conqueror decides (or it expires).
+      this.retreat();
+      this.active = false;
+      return;
+    }
+
     const borderSize = this.attack.borderSize() + this.random.nextInt(0, 5);
     // Each tile consumes a fraction of the tick; conquer until it is spent.
     let tickBudget = 1;
@@ -393,6 +401,12 @@ export class AttackExecution implements Execution {
       }
       this._owner.conquer(tileToConquer);
       this.handleDeadDefender();
+      if (targetPlayer && this.mg.hasPendingConquest(targetPlayer)) {
+        // Settlement just pended: freeze the target's territory right here,
+        // mid-tick. The tick-top pending check retreats the attack on the
+        // next tick.
+        return;
+      }
     }
   }
 
@@ -502,8 +516,14 @@ export class AttackExecution implements Execution {
   private handleDeadDefender() {
     if (!(this.target.isPlayer() && this.target.numTilesOwned() < 100)) return;
     const target: Player = this.target;
+    if (this.mg.hasPendingConquest(target)) return;
 
-    this.mg.conquerPlayer(this._owner, target);
+    this.mg.startConquestSettle(this._owner, target);
+    if (this.mg.hasPendingConquest(target)) {
+      // Human conqueror: settlement is pending and the target survives with
+      // its remaining tiles until the conqueror decides.
+      return;
+    }
 
     const MAX_PASSES = 100;
     for (let pass = 0; pass < MAX_PASSES; pass++) {

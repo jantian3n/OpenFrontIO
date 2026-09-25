@@ -32,6 +32,14 @@ function spawnPlayerForTest(game: Game, player: Player, x: number, y: number) {
   game.addExecution(new PlayerExecution(player));
 }
 
+// Human conquerors pend the settlement once the target drops below 100
+// tiles and freeze it there; these tests assert the finished conquest, so
+// annex the pending settlement the way a player — or the 300-tick timeout —
+// would.
+function annexPendingConquest(game: Game, conqueror: Player, target: Player) {
+  game.executeConquestSettle(conqueror, target, "annex");
+}
+
 describe("Disconnected", () => {
   beforeEach(async () => {
     const player1Info = new PlayerInfo(
@@ -324,6 +332,7 @@ describe("Disconnected", () => {
       game.addExecution(new AttackExecution(1000, player1, player2.id(), null));
 
       executeTicks(game, 10);
+      annexPendingConquest(game, player1, player2);
 
       expect(player2.isAlive()).toBe(false);
       expect(warship.owner()).toBe(player1);
@@ -351,6 +360,7 @@ describe("Disconnected", () => {
       game.addExecution(new AttackExecution(1000, player1, player2.id(), null));
 
       executeTicks(game, 10);
+      annexPendingConquest(game, player1, player2);
 
       expect(player2.isAlive()).toBe(false);
       expect(transportShip.owner()).toBe(player1);
@@ -381,6 +391,7 @@ describe("Disconnected", () => {
       player2.markDisconnected(true);
       game.addExecution(new AttackExecution(1000, player1, player2.id(), null));
       executeTicks(game, 10);
+      annexPendingConquest(game, player1, player2);
 
       expect(player2.isAlive()).toBe(false);
       expect(transportShip.owner()).toBe(player1);
@@ -417,6 +428,7 @@ describe("Disconnected", () => {
       player2.markDisconnected(true);
       game.addExecution(new AttackExecution(1000, player1, player2.id(), null));
       executeTicks(game, 10);
+      annexPendingConquest(game, player1, player2);
 
       expect(player2.isAlive()).toBe(false);
       expect(transportShip.owner()).toBe(player1);

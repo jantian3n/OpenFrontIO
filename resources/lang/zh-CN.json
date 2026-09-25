@@ -845,6 +845,10 @@
     "received_gold_from_captured_ship": "捕获了 {name} 的商船，获得 {gold} 黄金",
     "received_gold_from_conquest": "征服了 {name} 并获得 {gold} 黄金",
     "conquered_no_gold": "征服了 {name} （对方没在玩了，因此未掠夺到黄金）",
+    "settled_conquest_annex": "吞并了 {name} 的全部剩余领土",
+    "settled_conquest_puppet": "{name} 现在是你的傀儡",
+    "settled_conquest_reparations": "{name} 向你支付了 {gold} 黄金赔款",
+    "settled_conquest_release": "释放了 {name}，解除了对其的征服",
     "missile_intercepted": "已拦截导弹 {unit}",
     "mirv_warheads_intercepted": "{count, plural, one {{count} 个 MIRV 弹头被拦截} other {{count} 个 MIRV 弹头被拦截}}",
     "sent_troops_to_player": "已向 {name} 发送 {troops} 军队",
@@ -1282,5 +1286,22 @@
     "target_context": "{name} 的外交",
     "show_all_wars": "查看全部战争",
     "empty_target": "当前选择没有进行中的战争、和谈或停战；原战争可能已经结束。"
+  },
+  "conquest_settlement": {
+    "amount_label": "赔款金额",
+    "annex": "全部吞并",
+    "annex_desc": "夺取 {name} 的全部剩余领土与 {gold} 黄金，{name} 被灭国。",
+    "description": "{name} 已濒临灭国，选择如何处置这次征服。",
+    "gold": "国库：{gold}",
+    "paused_hint": "决策期间游戏已暂停。",
+    "puppet": "扶植傀儡",
+    "puppet_desc": "{name} 存活并成为你的傀儡，保留领土，并上缴 20% 黄金。",
+    "release": "无条件释放",
+    "release_desc": "{name} 得以存活，双方战争转为停战。",
+    "reparations": "赔款释放",
+    "reparations_desc": "向 {name} 索取黄金赔款后将其释放，双方战争转为停战。",
+    "territory": "剩余领土：{tiles}",
+    "time_left": "{time} 后自动吞并",
+    "title": "征服处置"
   }
 }

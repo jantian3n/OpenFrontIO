@@ -34,6 +34,7 @@ const HUD_TAGS = [
   "unit-display",
   "player-panel",
   "war-diplomacy-panel",
+  "conquest-settlement-modal",
   "chat-modal",
   "multi-tab-modal",
   "heads-up-message",

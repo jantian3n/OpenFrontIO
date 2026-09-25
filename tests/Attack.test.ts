@@ -100,6 +100,15 @@ describe("Attack", () => {
     expect(attacker.outgoingAttacks()).toHaveLength(1);
     expect(attacker.outgoingAttacks()[0].troops()).toBe(98);
 
+    // The blast only damages players owning tiles inside it. Previously the
+    // attack handed the attacker the defender's blast-zone land via the
+    // instant <100-tile conquest; now that conquest pends and the defender
+    // keeps that land, so give it to the attacker explicitly — the strike
+    // must still hit the attack itself.
+    attacker.conquer(game.ref(0, 14));
+    attacker.conquer(game.ref(0, 15));
+    attacker.conquer(game.ref(1, 15));
+
     // Make the nuke go kaboom
     game.executeNextTick();
     expect(nuke.isActive()).toBe(false);

@@ -285,7 +285,8 @@ export class TransportShipExecution implements Execution {
         if (
           this.mg.owner(this.dst) !== this.target ||
           (this.target.isPlayer() &&
-            !this.attacker.canAttackPlayer(this.target))
+            (this.mg.hasPendingConquest(this.target) ||
+              !this.attacker.canAttackPlayer(this.target)))
         ) {
           this.boat.updateTransportShipState({ isRetreating: true });
           this.retreatDst = null;

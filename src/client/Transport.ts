@@ -29,6 +29,7 @@ import {
   ClientSendLiveStatsMessage,
   ClientSendWinnerMessage,
   ClientSpectateMessage,
+  ConquestSettleIntent,
   GameConfig,
   Intent,
   LiveStats,
@@ -87,6 +88,10 @@ export class SendSubjectIntentEvent implements GameEvent {
 
 export class SendWarDiplomacyIntentEvent implements GameEvent {
   constructor(public readonly intent: WarDiplomacyIntent) {}
+}
+
+export class SendConquestSettleIntentEvent implements GameEvent {
+  constructor(public readonly intent: ConquestSettleIntent) {}
 }
 
 export class SendUpgradeStructureIntentEvent implements GameEvent {
@@ -314,6 +319,9 @@ export class Transport {
     );
     this.subscribe(SendSubjectIntentEvent, (e) => this.onSendSubjectIntent(e));
     this.subscribe(SendWarDiplomacyIntentEvent, (e) =>
+      this.sendIntent(e.intent),
+    );
+    this.subscribe(SendConquestSettleIntentEvent, (e) =>
       this.sendIntent(e.intent),
     );
     this.subscribe(SendSpawnIntentEvent, (e) => this.onSendSpawnIntentEvent(e));

@@ -147,6 +147,15 @@ async function runScenario(s: Scenario): Promise<Metrics> {
     ticks++;
   } while (attacker.outgoingAttacks().length > 0 && ticks < maxTicks);
 
+  // A human conqueror pends the settlement once the defender drops below
+  // 100 tiles, and the attack retreats with the defender frozen. Benchmarks
+  // measure the attack itself, so settle the pending conquest the way a
+  // player (or the 300-tick timeout) would — annex — keeping the metrics'
+  // "attack conquered everything" semantics.
+  if (defenderSide !== null && game.hasPendingConquest(defender)) {
+    game.executeConquestSettle(attacker, defender, "annex");
+  }
+
   const inFlight = attacker
     .outgoingAttacks()
     .reduce((sum, a) => sum + a.troops(), 0);
@@ -200,9 +209,9 @@ const [WORLD_HILLS_L, WORLD_HILLS_R] = worldBlock(1300, 200);
 const [WORLD_MTN_L, WORLD_MTN_R] = worldBlock(1400, 200);
 
 // 20x20 (400-tile) turtle in the middle of the plains map, surrounded by the
-// attacker. Note: players with < 100 tiles are conquered outright after
-// losing a single tile (AttackExecution.handleDeadDefender), so turtles must
-// be bigger than that to exercise the formula.
+// attacker. Note: once a player drops below 100 tiles the conquest pends
+// (human conqueror) and the attack retreats (AttackExecution.handleDeadDefender),
+// so turtles must be bigger than that to exercise the formula.
 const PLAINS_TURTLE: Rect = { x: 40, y: 40, w: 20, h: 20 };
 const PLAINS_TURTLE_TINY: Rect = { x: 45, y: 45, w: 10, h: 10 };
 
@@ -482,7 +491,9 @@ const scenarios: Record<string, Scenario> = {
       },
       attackTroops: 1_000_000,
     },
-  // Documents the <100-tile instant-conquest rule, not the formula.
+  // Documents the <100-tile settlement rule, not the formula: losing one
+  // tile drops the turtle to 99 tiles and pends the conquest (the harness
+  // annexes right after the attack retreats).
   "plains 100-tile turtle, 1M troops: conquered outright after one tile": {
     map: "plains",
     attacker: { rect: { x: 0, y: 0, w: 100, h: 100 }, troops: 2_000_000 },

@@ -34,7 +34,10 @@ describe("annexation only takes territory that is actually enclosed", () => {
   beforeEach(async () => {
     game = await setup("big_plains", {}, [
       new PlayerInfo("defender", PlayerType.Human, "client1", "defender_id"),
-      new PlayerInfo("attacker", PlayerType.Human, "client2", "attacker_id"),
+      // Bot captor: a human conqueror's annexation now pends awaiting the
+      // conquest settlement, while bots keep the legacy immediate annex.
+      // These tests pin the enclosure gating itself, so keep the captor a bot.
+      new PlayerInfo("attacker", PlayerType.Bot, "client2", "attacker_id"),
     ]);
     defender = game.player("defender_id");
     attacker = game.player("attacker_id");

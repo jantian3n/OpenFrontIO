@@ -9,6 +9,7 @@ import { BreakAllianceExecution } from "./alliance/BreakAllianceExecution";
 import { AttackExecution } from "./AttackExecution";
 import { BoatRetreatExecution } from "./BoatRetreatExecution";
 import { ConstructionExecution } from "./ConstructionExecution";
+import { ConquestSettlementExecution } from "./ConquestSettlementExecution";
 import { DeleteUnitExecution } from "./DeleteUnitExecution";
 import { DonateGoldExecution } from "./DonateGoldExecution";
 import { DonateTroopsExecution } from "./DonateTroopExecution";
@@ -148,6 +149,8 @@ export class Executor {
       case "war_propose_peace":
       case "war_answer_peace":
         return new WarDiplomacyExecution(player, intent);
+      case "conquest_settle":
+        return new ConquestSettlementExecution(player, intent);
       case "toggle_pause":
         return new PauseExecution(player, intent.paused);
       default:

@@ -128,7 +128,10 @@ export function authorizeIntent(
       return null;
 
     default:
-      // Gameplay intents: websocket players only.
+      // Gameplay intents: websocket players only. This covers conquest_settle
+      // exactly like the war-diplomacy intents: the sender-in-game-and-alive
+      // and conqueror-ownership checks need the roster, so they live in the
+      // sim layer (ConquestSettlementExecution + GameImpl.executeConquestSettle).
       if (actor.isAdminBot) {
         return { status: 400, error: "intent not permitted for admin bot" };
       }

@@ -459,6 +459,11 @@ export class PlayerExecution implements Execution {
   }
 
   private removeCluster(cluster: readonly TileRef[]) {
+    if (this.mg.hasPendingConquest(this.player)) {
+      // The target is frozen until its conquest settles: no tiles change
+      // hands and the settlement trigger below is not re-run every calc.
+      return;
+    }
     for (const t of cluster) {
       if (this.mg?.ownerID(t) !== this.player?.smallID()) {
         // Other removeCluster operations could change tile owners,
@@ -496,7 +501,12 @@ export class PlayerExecution implements Execution {
     );
 
     if (this.player.numTilesOwned() === tiles.length) {
-      this.mg.conquerPlayer(capturing, this.player);
+      this.mg.startConquestSettle(capturing, this.player);
+      if (this.mg.hasPendingConquest(this.player)) {
+        // Human captor: settlement is pending, so the enclosed territory
+        // stays with its owner until the conqueror decides.
+        return;
+      }
     }
 
     for (const tile of tiles) {

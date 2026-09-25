@@ -39,6 +39,7 @@ export type Intent =
   | AllianceRejectIntent
   | AllianceExtensionIntent
   | WarDiplomacyIntent
+  | ConquestSettleIntent
   | BreakAllianceIntent
   | SubjectIntent
   | TargetPlayerIntent
@@ -69,6 +70,7 @@ export type AllianceRejectIntent = z.infer<typeof AllianceRejectIntentSchema>;
 export type BreakAllianceIntent = z.infer<typeof BreakAllianceIntentSchema>;
 export type SubjectIntent = z.infer<typeof SubjectIntentSchema>;
 export type WarDiplomacyIntent = z.infer<typeof WarDiplomacyIntentSchema>;
+export type ConquestSettleIntent = z.infer<typeof ConquestSettleIntentSchema>;
 export type TargetPlayerIntent = z.infer<typeof TargetPlayerIntentSchema>;
 export type EmojiIntent = z.infer<typeof EmojiIntentSchema>;
 export type DonateGoldIntent = z.infer<typeof DonateGoldIntentSchema>;
@@ -715,6 +717,14 @@ export const WarDiplomacyIntentSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
+export const ConquestSettleIntentSchema = z.object({
+  type: z.literal("conquest_settle"),
+  targetId: MappedID,
+  decision: z.enum(["annex", "puppet", "reparations", "release"]),
+  // Gold demanded for "reparations"; clamped to the target's balance in the sim.
+  amount: zb.uint({ max: Number.MAX_SAFE_INTEGER }).optional(),
+});
+
 export const TargetPlayerIntentSchema = z.object({
   type: z.literal("targetPlayer"),
   target: MappedID,
@@ -851,6 +861,7 @@ export const IntentSchema = z.discriminatedUnion("type", [
   QuickChatIntentSchema,
   AllianceExtensionIntentSchema,
   ...WarDiplomacyIntentSchema.options,
+  ConquestSettleIntentSchema,
   DeleteUnitIntentSchema,
   KickPlayerIntentSchema,
   TogglePauseIntentSchema,

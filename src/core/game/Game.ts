@@ -28,6 +28,16 @@ export type PlayerID = string;
 export type Tick = number;
 export type Gold = bigint;
 
+export type ConquestSettlementDecision =
+  | "annex"
+  | "puppet"
+  | "reparations"
+  | "release";
+
+/** How long a human conqueror has to pick a conquest settlement before it
+ * auto-settles as annex. */
+export const CONQUEST_SETTLEMENT_DURATION_TICKS = 300;
+
 export type WarshipState = {
   state: "patrolling" | "retreating" | "docked";
   patrolTile?: TileRef;
@@ -982,7 +992,27 @@ export interface Game extends GameMap {
 
   addUpdate(update: GameUpdate): void;
   railNetwork(): RailNetwork;
-  conquerPlayer(conqueror: Player, conquered: Player): void;
+  conquerPlayer(conqueror: Player, conquered: Player): Gold;
+  /**
+   * Entry point for conquest settlements. If the conqueror is a bot/nation,
+   * the conquest settles immediately via conquerPlayer (unchanged legacy
+   * behavior). If the conqueror is human, the settlement is pended and the
+   * conqueror picks the outcome via a `conquest_settle` intent, which the
+   * execution layer settles with executeConquestSettle. Pending conquests
+   * expire after CONQUEST_SETTLEMENT_DURATION_TICKS and auto-settle as annex.
+   */
+  startConquestSettle(conqueror: Player, conquered: Player): void;
+  /** Settles a pending conquest. No-op unless `conqueror` is the recorded
+   * conqueror of a live, unexpired pending settlement for `target`. */
+  executeConquestSettle(
+    conqueror: Player,
+    target: Player,
+    decision: ConquestSettlementDecision,
+    amount?: Gold,
+  ): void;
+  /** Whether `player` has a pending conquest settlement against them (they
+   * keep their remaining territory until it settles). */
+  hasPendingConquest(player: Player): boolean;
   miniWaterHPA(): PathFinder<number> | null;
   miniWaterGraph(): AbstractGraph | null;
   getWaterComponent(tile: TileRef): number | null;

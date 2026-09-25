@@ -19,7 +19,10 @@ describe("PlayerExecution Annexation Bug", () => {
       "big_plains",
       { infiniteGold: true, instantBuild: true },
       [
-        new PlayerInfo("large", PlayerType.Human, "client1", "large_id"),
+        // Bot captor: a human conqueror's annexation now pends awaiting the
+      // conquest settlement, while bots keep the legacy immediate annex. The
+      // inverse-annexation geometry under test is independent of that choice.
+      new PlayerInfo("large", PlayerType.Bot, "client1", "large_id"),
         new PlayerInfo("small", PlayerType.Human, "client2", "small_id"),
       ],
     );

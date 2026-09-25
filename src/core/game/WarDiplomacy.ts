@@ -1389,6 +1389,29 @@ export class WarDiplomacy {
       }
     }
 
+    this.beginTruce(war);
+    this.addEvent(war, "peaceAccepted");
+    this.addEvent(war, "truceBegan");
+    return true;
+  }
+
+  /**
+   * Turns an active war between `a` and `b` into a truce (used when a conquest
+   * settles without annexation). No-op when the two share no active war.
+   */
+  conquestTruce(a: Player, b: Player): void {
+    const war = this.findWarBetween(a.id(), b.id());
+    if (war === undefined || war.status !== "active") return;
+    this.beginTruce(war);
+    this.addEvent(war, "peaceAccepted");
+    this.addEvent(war, "truceBegan");
+    this.emit(war);
+  }
+
+  // Shared by peace-proposal settlement and conquest settlement: flip the war
+  // to truce, drop any pending peace proposal, cancel pending calls, and clear
+  // the offer cooldown. Event emission is left to the caller.
+  private beginTruce(war: MutableWar): void {
     const now = this.game.ticks();
     war.status = "truce";
     war.truceEndsAt = now + WAR_TRUCE_DURATION_TICKS;
@@ -1400,9 +1423,6 @@ export class WarDiplomacy {
       }
     }
     this._peaceCooldownUntil.delete(war.id);
-    this.addEvent(war, "peaceAccepted");
-    this.addEvent(war, "truceBegan");
-    return true;
   }
 
   private cancelProposal(
