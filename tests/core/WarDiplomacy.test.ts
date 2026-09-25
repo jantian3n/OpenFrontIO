@@ -318,4 +318,94 @@ describe("WarDiplomacy", () => {
     expect(second.participantIDs).toEqual(first.participantIDs);
     expect(second.hash).toBe(first.hash);
   });
+
+  test("does not rescan baseline territory for each ownership change", async () => {
+    const game = await setup("plains", {}, [
+      new PlayerInfo("attacker", PlayerType.Human, null, "attacker"),
+      new PlayerInfo("defender", PlayerType.Human, null, "defender"),
+    ]);
+    const attacker = game.player("attacker");
+    const defender = game.player("defender");
+    attacker.conquer(game.ref(0, 0));
+    const targetTile = game.ref(40, 40);
+    defender.conquer(targetTile);
+    const diplomacy = game.warDiplomacy();
+    const warId = diplomacy.beginHostileAction(attacker, defender)!;
+    const owner = vi.spyOn(game, "owner");
+
+    diplomacy.recordTerritoryOwnerChange(targetTile, defender, attacker);
+
+    expect(owner).not.toHaveBeenCalled();
+    expect(diplomacy.getWar(warId)!.sides[0].score.territory).toBe(5000);
+    owner.mockRestore();
+  });
+
+  test("recounts captured land when later allies join the same side", async () => {
+    const game = await setup("plains", {}, [
+      new PlayerInfo("attacker", PlayerType.Human, null, "attacker"),
+      new PlayerInfo("defender", PlayerType.Human, null, "defender"),
+      new PlayerInfo("first-ally", PlayerType.Human, null, "first-ally"),
+      new PlayerInfo("second-ally", PlayerType.Human, null, "second-ally"),
+    ]);
+    const attacker = game.player("attacker");
+    const defender = game.player("defender");
+    const firstAlly = game.player("first-ally");
+    const secondAlly = game.player("second-ally");
+    attacker.conquer(game.ref(0, 0));
+    const targetTile = game.ref(40, 40);
+    defender.conquer(targetTile);
+    firstAlly.conquer(game.ref(20, 20));
+    secondAlly.conquer(game.ref(60, 60));
+
+    const diplomacy = game.warDiplomacy();
+    attacker.createAllianceRequest(firstAlly)?.accept();
+    attacker.createAllianceRequest(secondAlly)?.accept();
+    const warId = diplomacy.beginHostileAction(attacker, defender)!;
+    attacker.conquer(targetTile);
+    expect(diplomacy.getWar(warId)!.sides[0].score.territory).toBe(5000);
+
+    firstAlly.conquer(targetTile);
+    expect(diplomacy.getWar(warId)!.sides[0].score.territory).toBe(0);
+    expect(diplomacy.createCallToArms(warId, attacker, firstAlly)).not.toBeNull();
+    expect(diplomacy.answerCall(warId, firstAlly, true)).toBe(true);
+    expect(diplomacy.getWar(warId)!.sides[0].score.territory).toBe(5000);
+
+    secondAlly.conquer(targetTile);
+    expect(diplomacy.getWar(warId)!.sides[0].score.territory).toBe(0);
+    expect(diplomacy.createCallToArms(warId, attacker, secondAlly)).not.toBeNull();
+    expect(diplomacy.answerCall(warId, secondAlly, true)).toBe(true);
+    expect(diplomacy.getWar(warId)!.sides[0].score.territory).toBe(5000);
+  });
+
+  test("hashes cached baseline territory without iterating its tile set", async () => {
+    const game = await setup("plains", {}, [
+      new PlayerInfo("attacker", PlayerType.Human, null, "attacker"),
+      new PlayerInfo("defender", PlayerType.Human, null, "defender"),
+    ]);
+    const attacker = game.player("attacker");
+    const defender = game.player("defender");
+    attacker.conquer(game.ref(0, 0));
+    defender.conquer(game.ref(40, 40));
+    const diplomacy = game.warDiplomacy();
+    const warId = diplomacy.beginHostileAction(attacker, defender)!;
+    const war = (
+      diplomacy as unknown as {
+        _wars: Map<
+          number,
+          { sides: [{ baselineTerritory: Set<number> }, { baselineTerritory: Set<number> }] }
+        >;
+      }
+    )._wars.get(warId)!;
+    const baseline = war.sides[0].baselineTerritory;
+    const originalIterator = baseline[Symbol.iterator];
+    baseline[Symbol.iterator] = () => {
+      throw new Error("war hash iterated baseline territory");
+    };
+
+    try {
+      expect(() => diplomacy.hash()).not.toThrow();
+    } finally {
+      baseline[Symbol.iterator] = originalIterator;
+    }
+  });
 });

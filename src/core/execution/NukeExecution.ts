@@ -453,15 +453,6 @@ export class NukeExecution implements Execution {
       if (owner.isPlayer()) {
         owner.relinquish(tile);
         tilesPerPlayers.set(owner, (tilesPerPlayers.get(owner) ?? 0) + 1);
-        const impactWarId = impactWarIDs.get(owner);
-        if (impactWarId !== null && impactWarId !== undefined) {
-          mg.warDiplomacy().recordTerritoryChange(
-            impactWarId,
-            tile,
-            owner,
-            mg.terraNullius(),
-          );
-        }
       }
 
       // Queue land tiles for batched water conversion

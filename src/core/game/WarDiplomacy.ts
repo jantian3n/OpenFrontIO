@@ -108,6 +108,8 @@ type MutableWarParticipant = WarParticipantSnapshot;
 interface MutableWarSide extends WarSideSnapshot {
   participants: MutableWarParticipant[];
   baselineTerritory: Set<TileRef>;
+  baselineTerritoryHash: number;
+  capturedTerritory: number;
   baselineTroopsRemaining: Map<PlayerID, number>;
   baselineMilitaryValue: number;
   baselineStructureValue: number;
@@ -417,7 +419,9 @@ export class WarDiplomacy {
         .map((war) => ({
           snapshot: this.snapshot(war),
           baselines: war.sides.map((side) => ({
-            territory: Array.from(side.baselineTerritory).sort((a, b) => a - b),
+            territoryHash: side.baselineTerritoryHash,
+            territoryCount: side.baselineTerritory.size,
+            capturedTerritory: side.capturedTerritory,
             troops: Array.from(side.baselineTroopsRemaining.entries()).sort(
               ([left], [right]) => left.localeCompare(right),
             ),
@@ -656,27 +660,44 @@ export class WarDiplomacy {
     return settledOrPending;
   }
 
-  recordTerritoryChange(
-    warId: number,
-    _tile: TileRef,
-    _oldOwner: Player | TerraNullius,
-    _newOwner: Player | TerraNullius,
-  ): void {
-    const war = this._wars.get(warId);
-    if (war === undefined || !this.isScoring(war)) return;
-    if (this.recalculateScores(war)) this._dirtyWars.add(war.id);
-  }
-
   recordTerritoryOwnerChange(
-    _tile: TileRef,
+    tile: TileRef,
     oldOwner: Player | TerraNullius,
     newOwner: Player | TerraNullius,
   ): void {
     for (const war of this._wars.values()) {
       if (!this.isScoring(war)) continue;
-      const involvesOwner = (owner: Player | TerraNullius) =>
-        owner.isPlayer() && this.sideIndex(war, owner.id()) !== null;
-      if (!involvesOwner(oldOwner) && !involvesOwner(newOwner)) continue;
+
+      const baselineInSideZero = war.sides[0].baselineTerritory.has(tile);
+      const baselineInSideOne = war.sides[1].baselineTerritory.has(tile);
+      if (!baselineInSideZero && !baselineInSideOne) continue;
+
+      const oldOwnerSide = oldOwner.isPlayer()
+        ? this.sideIndex(war, oldOwner.id())
+        : null;
+      const newOwnerSide = newOwner.isPlayer()
+        ? this.sideIndex(war, newOwner.id())
+        : null;
+      let territoryChanged = false;
+      if (baselineInSideZero) {
+        territoryChanged =
+          this.updateCapturedTerritory(
+            war,
+            0,
+            oldOwnerSide,
+            newOwnerSide,
+          ) || territoryChanged;
+      }
+      if (baselineInSideOne) {
+        territoryChanged =
+          this.updateCapturedTerritory(
+            war,
+            1,
+            oldOwnerSide,
+            newOwnerSide,
+          ) || territoryChanged;
+      }
+      if (!territoryChanged) continue;
       if (this.recalculateScores(war)) this._dirtyWars.add(war.id);
     }
   }
@@ -811,6 +832,8 @@ export class WarDiplomacy {
       participants,
       score: this.emptyScore(),
       baselineTerritory,
+      baselineTerritoryHash: this.hashTerritory(baselineTerritory),
+      capturedTerritory: 0,
       baselineTroopsRemaining,
       baselineMilitaryValue,
       baselineStructureValue,
@@ -818,6 +841,27 @@ export class WarDiplomacy {
       baselineMilitaryUnits,
       baselineStructures,
     };
+  }
+
+  private hashTerritory(territory: Set<TileRef>): number {
+    return simpleHash(
+      JSON.stringify(Array.from(territory).sort((a, b) => a - b)),
+    );
+  }
+
+  private updateCapturedTerritory(
+    war: MutableWar,
+    baselineSide: 0 | 1,
+    oldOwnerSide: 0 | 1 | null,
+    newOwnerSide: 0 | 1 | null,
+  ): boolean {
+    const scoringSide = baselineSide === 0 ? 1 : 0;
+    const wasCaptured = oldOwnerSide === scoringSide;
+    const isCaptured = newOwnerSide === scoringSide;
+    if (wasCaptured === isCaptured) return false;
+
+    war.sides[scoringSide].capturedTerritory += isCaptured ? 1 : -1;
+    return true;
   }
 
   private structureWeight(type: UnitType): number {
@@ -863,19 +907,6 @@ export class WarDiplomacy {
 
   private recalculateScores(war: MutableWar): boolean {
     const old = war.sides.map((side) => ({ ...side.score }));
-    const territoryCounts: [number, number] = [0, 0];
-    for (const tile of war.sides[0].baselineTerritory) {
-      const owner = this.game.owner(tile);
-      if (owner.isPlayer() && this.sideIndex(war, owner.id()) === 1) {
-        territoryCounts[1]++;
-      }
-    }
-    for (const tile of war.sides[1].baselineTerritory) {
-      const owner = this.game.owner(tile);
-      if (owner.isPlayer() && this.sideIndex(war, owner.id()) === 0) {
-        territoryCounts[0]++;
-      }
-    }
 
     for (const sideIndex of [0, 1] as const) {
       const side = war.sides[sideIndex];
@@ -894,7 +925,7 @@ export class WarDiplomacy {
             : Math.min(
                 5000,
                 Math.floor(
-                  (5000 * territoryCounts[sideIndex]) /
+                  (5000 * side.capturedTerritory) /
                     enemy.baselineTerritory.size,
                 ),
               ),
@@ -1190,10 +1221,15 @@ export class WarDiplomacy {
       isAlive: player.isAlive(),
     };
     const side = war.sides[sideIndex];
+    const opposingSide = war.sides[sideIndex === 0 ? 1 : 0];
     const baseline = this.makeSide([player], [participant]);
     side.participants.push(participant);
     side.participants.sort((a, b) => a.playerID.localeCompare(b.playerID));
     for (const tile of baseline.baselineTerritory) {
+      // Joining changes this player's existing tiles from outsider-owned to
+      // coalition-owned. Count enemy baseline tiles even when a previous
+      // participant has already put the same tile in this side's baseline.
+      if (opposingSide.baselineTerritory.has(tile)) side.capturedTerritory++;
       side.baselineTerritory.add(tile);
     }
     for (const [id, troops] of baseline.baselineTroopsRemaining) {
@@ -1205,6 +1241,7 @@ export class WarDiplomacy {
     for (const [id, value] of baseline.baselineStructures) {
       side.baselineStructures.set(id, value);
     }
+    side.baselineTerritoryHash = this.hashTerritory(side.baselineTerritory);
     side.baselineMilitaryValue += baseline.baselineMilitaryValue;
     side.baselineStructureValue += baseline.baselineStructureValue;
     this.recalculateScores(war);
