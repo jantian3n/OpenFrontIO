@@ -103,6 +103,14 @@ describe("AttackStats", () => {
   });
 
   test("records no maximum for an attack that is cancelled out on arrival", () => {
+    // Keep the defender alive after the first tick while preserving a nearby
+    // front for the opposing attack to cancel against.
+    for (let x = 0; x < 11; x++) {
+      for (let y = 0; y < 10; y++) {
+        player1.conquer(game.ref(x, y));
+      }
+    }
+    player1.conquer(game.ref(49, 50));
     player1.addTroops(1000);
     player2.addTroops(1000);
     game.addExecution(new AttackExecution(50, player2, player1.id()));

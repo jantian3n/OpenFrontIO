@@ -174,6 +174,26 @@ function addPlayerToGame(
   return game.player(playerInfo.id);
 }
 
+function claimLandAdjacentTo(player: Player, base: Player): void {
+  const neighbors: TileRef[] = [0, 0, 0, 0];
+  for (const tile of base.tiles()) {
+    const count = game.neighbors4(tile, neighbors);
+    for (let i = 0; i < count; i++) {
+      const neighbor = neighbors[i];
+      if (
+        game.hasOwner(neighbor) ||
+        !game.isLand(neighbor) ||
+        game.isImpassable(neighbor)
+      ) {
+        continue;
+      }
+      player.conquer(neighbor);
+      if (player.sharesBorderWith(base)) return;
+    }
+  }
+  throw new Error(`No free land adjacent to ${base.id()}`);
+}
+
 describe("Attack race condition with alliance requests", () => {
   beforeEach(async () => {
     game = await setup("ocean_and_land", {
@@ -427,6 +447,7 @@ describe("Attack immunity", () => {
     playerB = addPlayerToGame(playerBInfo, game, game.ref(7, 15));
     game.executeNextTick();
     game.executeNextTick();
+    claimLandAdjacentTo(playerA, playerB);
   });
 
   test("Should not be able to attack during immunity phase", async () => {
@@ -444,6 +465,8 @@ describe("Attack immunity", () => {
 
   test("Should be able to attack after immunity phase", async () => {
     waitForImmunityToEnd();
+    expect(playerA.sharesBorderWith(playerB)).toBe(true);
+    expect(playerA.canAttackPlayer(playerB)).toBe(true);
     // Player A attacks Player B
     const attackExecution = new AttackExecution(
       null,
@@ -497,6 +520,7 @@ describe("Attack immunity", () => {
     const nationId = "nation_id";
     const nation = new PlayerInfo("nation", PlayerType.Nation, null, nationId);
     game.addPlayer(nation);
+    claimLandAdjacentTo(game.player(nationId), playerA);
     // Player A attacks the nation during nation immunity
     const attackExecution = new AttackExecution(null, playerA, nationId, null);
     game.addExecution(attackExecution);
@@ -511,6 +535,7 @@ describe("Attack immunity", () => {
     const nationId = "nation_id";
     const nation = new PlayerInfo("nation", PlayerType.Nation, null, nationId);
     game.addPlayer(nation);
+    claimLandAdjacentTo(game.player(nationId), playerA);
     waitForImmunityToEnd();
     // Player A attacks the nation after immunity
     const attackExecution = new AttackExecution(null, playerA, nationId, null);
@@ -523,6 +548,7 @@ describe("Attack immunity", () => {
     const botId = "bot_id";
     const bot = new PlayerInfo("bot", PlayerType.Bot, null, botId);
     game.addPlayer(bot);
+    claimLandAdjacentTo(game.player(botId), playerA);
     // Player A attacks the bot
     const attackExecution = new AttackExecution(null, playerA, botId, null);
     game.addExecution(attackExecution);
@@ -579,6 +605,7 @@ describe("Attack immunity", () => {
     game.addPlayer(nationInfo);
     const nation = game.player(nationInfo.id);
     nation.conquer(availableLand[0]);
+    claimLandAdjacentTo(nation, playerA);
 
     // Nation attacks playerA during PVP immunity - should succeed
     game.addExecution(new AttackExecution(null, nation, "playerA_id", null));
@@ -591,6 +618,7 @@ describe("Attack immunity", () => {
     const bot = addPlayerToGame(botInfo, game, game.ref(15, 0));
     game.executeNextTick();
     game.executeNextTick();
+    claimLandAdjacentTo(bot, playerA);
 
     // Bot attacks playerA during PVP immunity - should succeed
     game.addExecution(new AttackExecution(null, bot, "playerA_id", null));
@@ -605,17 +633,18 @@ describe("Attack immunity", () => {
       null,
       "nationA_id",
     );
-    const nationA = addPlayerToGame(nationAInfo, game, game.ref(15, 0));
-
+    game.addPlayer(nationAInfo);
+    const nationA = game.player(nationAInfo.id);
     const nationBInfo = new PlayerInfo(
       "nationB",
       PlayerType.Nation,
       null,
       "nationB_id",
     );
-    addPlayerToGame(nationBInfo, game, game.ref(15, 15));
-    game.executeNextTick();
-    game.executeNextTick();
+    game.addPlayer(nationBInfo);
+    const nationB = game.player(nationBInfo.id);
+    claimLandAdjacentTo(nationA, playerA);
+    claimLandAdjacentTo(nationB, nationA);
 
     // Nation A attacks Nation B during PVP immunity - should succeed
     game.addExecution(new AttackExecution(null, nationA, "nationB_id", null));
@@ -644,6 +673,7 @@ describe("Attack immunity", () => {
     game.addPlayer(nationInfo);
     const nation = game.player(nationInfo.id);
     nation.conquer(availableLand[0]);
+    claimLandAdjacentTo(nation, playerA);
 
     // Create alliance between nation and playerA
     const allianceRequest = nation.createAllianceRequest(playerA);

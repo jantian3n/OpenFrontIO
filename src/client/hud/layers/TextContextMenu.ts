@@ -312,9 +312,9 @@ export class TextContextMenu implements Controller {
       embargo: "stop_trade",
       target: "target_player",
     };
-    const candidate = `context_menu.action.${aliases[name] ?? name.toLowerCase().replace(/\s+/g, "_")}`;
-    const translated = translateText(candidate);
-    return translated === candidate ? translateText(name) : translated;
+    const candidateKey = `context_menu.action.${aliases[name] ?? name.toLowerCase().replace(/\s+/g, "_")}`;
+    const translated = translateText(candidateKey);
+    return translated === candidateKey ? translateText(name) : translated;
   }
 
   private resolveItemLabel(item: MenuElement): string {
@@ -373,7 +373,9 @@ export class TextContextMenu implements Controller {
         }),
       );
     }
-    if (disabled && !reason) details.push(translateText("common.disabled"));
+    if (disabled && !reason) {
+      details.push(translateText("context_menu.reason.unavailable"));
+    }
     return [...new Set(details)];
   }
 

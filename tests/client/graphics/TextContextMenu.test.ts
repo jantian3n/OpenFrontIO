@@ -78,6 +78,23 @@ describe("TextContextMenu", () => {
     ).toBe(true);
   });
 
+  it("explains disabled actions without a specific reason", () => {
+    const { menu, root } = menuFixture();
+    root.subMenu = () => [
+      {
+        id: "generic-disabled",
+        name: "context_menu.action.generic_disabled",
+        disabled: () => true,
+      },
+    ];
+    menu.setParams({} as MenuElementParams);
+    menu.show(100, 100);
+
+    expect(menu.container.textContent).toContain(
+      "context_menu.reason.unavailable",
+    );
+  });
+
   it("navigates into a submenu and back", () => {
     const { menu } = menuFixture();
     menu.show(100, 100);
