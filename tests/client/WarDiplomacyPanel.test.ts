@@ -27,6 +27,8 @@ function player(
     isAlive: () => true,
     isSubject: () => false,
     isOnSameTeam: () => false,
+    isAlliedWith: () => false,
+    isInSubjectRelation: () => false,
     gold: () => BigInt(gold),
     goldEarned: () => 250,
     tradeGold: () => 30,
@@ -300,11 +302,9 @@ describe("WarDiplomacyPanel", () => {
     const eligibleWar = war();
     eligibleWar.sides[0].score.total = 8_000;
     eligibleWar.sides[1].score.total = 0;
-    const { panel, eventBus } = setupPanel(
-      [eligibleWar],
-      proposer,
-      { player: (id: string) => (id === "p1" ? proposer : target) },
-    );
+    const { panel, eventBus } = setupPanel([eligibleWar], proposer, {
+      player: (id: string) => (id === "p1" ? proposer : target),
+    });
     const sent: unknown[] = [];
     eventBus.on(SendWarDiplomacyIntentEvent, (event) =>
       sent.push(event.intent),
@@ -337,11 +337,9 @@ describe("WarDiplomacyPanel", () => {
     const eligibleWar = war();
     eligibleWar.sides[0].score.total = 8_000;
     eligibleWar.sides[1].score.total = 0;
-    const { panel, eventBus } = setupPanel(
-      [eligibleWar],
-      overlord,
-      { player: (id: string) => (id === "p1" ? overlord : target) },
-    );
+    const { panel, eventBus } = setupPanel([eligibleWar], overlord, {
+      player: (id: string) => (id === "p1" ? overlord : target),
+    });
     const sent: unknown[] = [];
     eventBus.on(SendWarDiplomacyIntentEvent, (event) =>
       sent.push(event.intent),

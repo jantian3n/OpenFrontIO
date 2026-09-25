@@ -19,6 +19,10 @@ import { renderNumber, translateText } from "../../Utils";
 import { GameView, PlayerView } from "../../view";
 import { BuildItemDisplay, BuildMenu, flattenedBuildTable } from "./BuildMenu";
 import { ChatIntegration } from "./ChatIntegration";
+import {
+  createDiplomacyMenuElement,
+  peaceShortcutElement,
+} from "./DiplomacyMenuElements";
 import { EmojiTable } from "./EmojiTable";
 import { PlayerActionHandler } from "./PlayerActionHandler";
 import { PlayerPanel } from "./PlayerPanel";
@@ -184,7 +188,6 @@ const allyTargetElement: MenuElement = {
   },
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const allyTradeElement: MenuElement = {
   id: "ally_trade",
   name: "trade",
@@ -201,7 +204,6 @@ const allyTradeElement: MenuElement = {
   },
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const allyEmbargoElement: MenuElement = {
   id: "ally_embargo",
   name: "embargo",
@@ -290,7 +292,6 @@ const allyBreakElement: MenuElement = {
   },
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const allyDonateGoldElement: MenuElement = {
   id: "ally_donate_gold",
   name: "donate gold",
@@ -305,7 +306,6 @@ const allyDonateGoldElement: MenuElement = {
   },
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const allyDonateTroopsElement: MenuElement = {
   id: "ally_donate_troops",
   name: "donate troops",
@@ -832,6 +832,16 @@ export const mainActionMenuElement: MenuElement = {
   },
 };
 
+const diplomacyMenuElement = createDiplomacyMenuElement([
+  allyRequestElement,
+  allyExtendElement,
+  allyBreakElement,
+  allyTradeElement,
+  allyEmbargoElement,
+  allyDonateGoldElement,
+  allyDonateTroopsElement,
+]);
+
 export const rootMenuElement: MenuElement = {
   id: "root",
   name: "root",
@@ -864,6 +874,8 @@ export const rootMenuElement: MenuElement = {
     const menuItems: (MenuElement | null)[] = [
       mainActionMenuElement,
       infoMenuElement,
+      peaceShortcutElement,
+      diplomacyMenuElement,
       ...(isOwnTerritory
         ? [deleteUnitElement, allyRequestElement, buildMenuElement]
         : [

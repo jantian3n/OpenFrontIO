@@ -12,6 +12,11 @@ import type { Controller } from "../../Controller";
 import { SendWarDiplomacyIntentEvent } from "../../Transport";
 import { renderDuration, renderNumber, translateText } from "../../Utils";
 import type { GameView, PlayerView } from "../../view";
+import { callToArmsUnavailableReason } from "./WarDiplomacyEligibility";
+import {
+  OpenWarDiplomacyEvent,
+  warInvolvesPlayer,
+} from "./WarDiplomacyNavigation";
 
 type PeaceClauseKind = WarClause["kind"];
 
@@ -97,13 +102,94 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
   public eventBus: EventBus;
 
   @state() private isOpen = false;
+  @state() private selectedPlayerID: string | null = null;
+  @state() private selectedWarID: number | null = null;
   @state() private clauseKinds = new Map<number, PeaceClauseKind>();
   @state() private selectedRecipients = new Map<number, string>();
   @state() private pendingActions = new Set<string>();
   @state() private validationErrors = new Map<number, string>();
+  private subscribedBus: EventBus | null = null;
+
+  initEventBus(eventBus: EventBus): void {
+    this.subscribedBus?.off(OpenWarDiplomacyEvent, this.openFromMenu);
+    this.eventBus = eventBus;
+    this.subscribedBus = eventBus;
+    eventBus.on(OpenWarDiplomacyEvent, this.openFromMenu);
+    this.isOpen = false;
+    this.selectedPlayerID = null;
+    this.selectedWarID = null;
+    this.clauseKinds = new Map();
+    this.selectedRecipients = new Map();
+    this.pendingActions = new Set();
+    this.validationErrors = new Map();
+  }
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    if (this.eventBus && !this.subscribedBus) this.initEventBus(this.eventBus);
+  }
+
+  disconnectedCallback(): void {
+    this.subscribedBus?.off(OpenWarDiplomacyEvent, this.openFromMenu);
+    this.subscribedBus = null;
+    super.disconnectedCallback();
+  }
+
+  private openFromMenu = (event: OpenWarDiplomacyEvent): void => {
+    this.selectedPlayerID = event.playerID;
+    this.selectedWarID = event.warID;
+    this.isOpen = true;
+    if (event.warID !== null && event.recipientID) {
+      this.selectedRecipients = new Map(this.selectedRecipients).set(
+        event.warID,
+        event.recipientID,
+      );
+    }
+    void this.updateComplete.then(() => {
+      // Ignore an older navigation if another menu was opened before rendering.
+      if (
+        !this.isOpen ||
+        this.selectedWarID !== event.warID ||
+        this.selectedPlayerID !== event.playerID
+      )
+        return;
+      const card = this.querySelector<HTMLElement>(
+        `[data-war-id="${event.warID}"]`,
+      );
+      const control =
+        event.section === "peace"
+          ? card?.querySelector<HTMLElement>(
+              "[data-action='answer-peace-accept'], select[name='clause-kind']",
+            )
+          : event.section === "call"
+            ? card?.querySelector<HTMLElement>(
+                "[data-action='answer-call-accept'], select[id^='war-call-']",
+              )
+            : null;
+      const target =
+        control ??
+        card ??
+        this.querySelector<HTMLElement>("#war-diplomacy-content");
+      target?.scrollIntoView?.({ block: "nearest" });
+      target?.focus({ preventScroll: true });
+    });
+  };
 
   createRenderRoot() {
     return this;
+  }
+
+  protected updated(): void {
+    // Changing the option list can reset a native select after Lit assigns
+    // .value. Restore the explicit recipient only after the options exist.
+    for (const select of this.querySelectorAll<HTMLSelectElement>(
+      "select[data-call-war-id]",
+    )) {
+      const recipient = this.selectedRecipients.get(
+        Number(select.dataset.callWarId),
+      );
+      if (recipient !== undefined) select.value = recipient;
+    }
   }
 
   getTickIntervalMs(): number {
@@ -116,6 +202,16 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
 
   private activeWars(): WarSnapshot[] {
     return this.game.wars().filter((war) => war.status !== "ended");
+  }
+
+  private displayedWars(wars: WarSnapshot[]): WarSnapshot[] {
+    if (this.selectedWarID !== null)
+      return wars.filter((war) => war.id === this.selectedWarID);
+    if (this.selectedPlayerID !== null)
+      return wars.filter((war) =>
+        warInvolvesPlayer(war, this.selectedPlayerID!),
+      );
+    return wars;
   }
 
   private participantName(id: string): string {
@@ -189,8 +285,7 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
       targetSide !== null &&
       overlordSide !== null &&
       targetSide !== overlordSide &&
-      war.sides[overlordSide].score.total -
-        war.sides[targetSide].score.total >=
+      war.sides[overlordSide].score.total - war.sides[targetSide].score.total >=
         WAR_PUPPET_SCORE_THRESHOLD &&
       !target.isSubject() &&
       target.subjects().length === 0 &&
@@ -227,7 +322,14 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
   }
 
   private callAlly(war: WarSnapshot, recipientID: string): void {
-    if (!recipientID) return;
+    const my = this.game.myPlayer();
+    const recipient = my?.allies().find((ally) => ally.id() === recipientID);
+    if (
+      !my ||
+      !recipient ||
+      callToArmsUnavailableReason(this.game, war, my, recipient)
+    )
+      return;
     this.send(
       { type: "war_call_to_arms", warId: war.id, recipient: recipientID },
       `invite:${war.id}:${recipientID}`,
@@ -428,18 +530,24 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
 
   private renderCallControls(war: WarSnapshot) {
     const my = this.game.myPlayer();
-    if (!my || this.sideFor(war, my.id()) === null || war.status !== "active")
+    if (
+      !my?.isAlive() ||
+      this.sideFor(war, my.id()) === null ||
+      war.status !== "active"
+    )
       return html``;
-    const participants = new Set(
-      war.sides.flatMap((side) =>
-        side.participants.map((entry) => entry.playerID),
-      ),
-    );
     const recipients = my
       .allies()
-      .filter((ally) => !participants.has(ally.id()));
+      .filter(
+        (ally) =>
+          callToArmsUnavailableReason(this.game, war, my, ally) === null,
+      );
     if (recipients.length === 0) return html``;
-    const value = this.selectedRecipients.get(war.id) ?? recipients[0].id();
+    const selected = this.selectedRecipients.get(war.id);
+    const unavailableSelection =
+      selected !== undefined &&
+      !recipients.some((ally) => ally.id() === selected);
+    const value = selected ?? recipients[0].id();
     const key = `invite:${war.id}:${value}`;
     return html`<div class="mt-3 flex flex-wrap items-center gap-2">
       <label class="sr-only" for=${`war-call-${war.id}`}
@@ -447,6 +555,7 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
       >
       <select
         id=${`war-call-${war.id}`}
+        data-call-war-id=${war.id}
         class="min-h-11 min-w-0 flex-1 rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
         .value=${value}
         @change=${(event: Event) => {
@@ -455,15 +564,23 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
           this.selectedRecipients = next;
         }}
       >
+        ${unavailableSelection
+          ? html`<option value=${value} selected disabled>
+              ${this.participantName(value)} —
+              ${translateText("context_menu.reason.no_callable_war")}
+            </option>`
+          : ""}
         ${recipients.map(
           (ally) =>
-            html`<option value=${ally.id()}>${ally.displayName()}</option>`,
+            html`<option value=${ally.id()} ?selected=${ally.id() === value}>
+              ${ally.displayName()}
+            </option>`,
         )}
       </select>
       <button
         data-action="call-ally"
         class="min-h-11 cursor-pointer rounded-lg border border-sky-300/20 bg-sky-500/10 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-        ?disabled=${this.pendingActions.has(key)}
+        ?disabled=${unavailableSelection || this.pendingActions.has(key)}
         @click=${() => this.callAlly(war, value)}
       >
         ${translateText("war_panel.call_ally")}
@@ -604,10 +721,7 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
       </div>`;
     }
     if (kind === "independence") {
-      const available = this.canProposeIndependence(
-        war,
-        this.game.myPlayer(),
-      );
+      const available = this.canProposeIndependence(war, this.game.myPlayer());
       return html`<p
         class="mt-2 rounded-lg bg-white/5 px-3 py-2 text-xs text-zinc-300"
       >
@@ -621,7 +735,11 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
 
   private renderPeaceProposalForm(war: WarSnapshot) {
     const my = this.game.myPlayer();
-    if (!my || war.status !== "active" || this.sideFor(war, my.id()) === null)
+    if (
+      !my?.isAlive() ||
+      war.status !== "active" ||
+      this.sideFor(war, my.id()) === null
+    )
       return html``;
     const leadingSide: 0 | 1 =
       war.sides[0].score.total >= war.sides[1].score.total ? 0 : 1;
@@ -916,6 +1034,7 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
     return html`<article
       class="rounded-2xl border border-white/10 bg-zinc-900/80 p-3 shadow-lg shadow-black/10 sm:p-4"
       data-war-id=${war.id}
+      tabindex="-1"
     >
       <div class="flex items-start justify-between gap-3">
         <div>
@@ -958,6 +1077,9 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
 
   render() {
     const wars = this.activeWars();
+    const displayedWars = this.displayedWars(wars);
+    const hasFilter =
+      this.selectedPlayerID !== null || this.selectedWarID !== null;
     const my = this.game.myPlayer();
     const pendingResponses = wars.reduce((count, war) => {
       const callCount = war.calls.filter(
@@ -978,7 +1100,13 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
         class="flex min-h-11 items-center gap-2 rounded-xl border border-cyan-200/15 bg-zinc-950/95 px-4 py-2.5 text-sm font-semibold text-zinc-100 shadow-xl shadow-black/30 backdrop-blur hover:border-cyan-200/30 hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
         aria-expanded=${this.isOpen}
         aria-controls="war-diplomacy-content"
-        @click=${() => (this.isOpen = !this.isOpen)}
+        @click=${() => {
+          this.isOpen = !this.isOpen;
+          if (this.isOpen) {
+            this.selectedPlayerID = null;
+            this.selectedWarID = null;
+          }
+        }}
       >
         <span
           aria-hidden="true"
@@ -1006,6 +1134,7 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
       ${this.isOpen
         ? html`<aside
             id="war-diplomacy-content"
+            tabindex="-1"
             class="fixed inset-x-2 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] top-14 z-[9001] flex max-h-[calc(100dvh-6rem)] max-w-xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/95 text-zinc-100 shadow-2xl shadow-black/50 backdrop-blur-xl sm:inset-x-auto sm:right-5 sm:top-16 sm:w-[min(32rem,calc(100vw-2.5rem))]"
             aria-label=${translateText("war_panel.title")}
           >
@@ -1029,13 +1158,40 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
               </button>
             </header>
             <div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 sm:p-4">
-              ${wars.length === 0
+              ${hasFilter
+                ? html`<div
+                    class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-cyan-300/10 px-3 py-2 text-sm"
+                  >
+                    <span
+                      >${this.selectedPlayerID !== null
+                        ? translateText("war_panel.target_context", {
+                            name: this.participantName(this.selectedPlayerID),
+                          })
+                        : translateText("war_panel.war_number", {
+                            number: this.selectedWarID!,
+                          })}</span
+                    >
+                    <button
+                      class="min-h-11 cursor-pointer rounded-lg px-3 text-cyan-100 hover:bg-white/10"
+                      data-action="show-all-wars"
+                      @click=${() => {
+                        this.selectedPlayerID = null;
+                        this.selectedWarID = null;
+                      }}
+                    >
+                      ${translateText("war_panel.show_all_wars")}
+                    </button>
+                  </div>`
+                : ""}
+              ${displayedWars.length === 0
                 ? html`<div
                     class="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-zinc-400"
                   >
-                    ${translateText("war_panel.empty")}
+                    ${translateText(
+                      hasFilter ? "war_panel.empty_target" : "war_panel.empty",
+                    )}
                   </div>`
-                : wars.map((war) => this.renderWar(war))}
+                : displayedWars.map((war) => this.renderWar(war))}
               ${my
                 ? html`${this.renderEconomicContext()}${this.renderVisibleThreats()}`
                 : ""}

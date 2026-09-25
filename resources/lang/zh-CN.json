@@ -1159,7 +1159,20 @@
       "donate_troops": "派遣士兵",
       "start_trade": "开始贸易",
       "stop_trade": "停止贸易",
-      "target_player": "标记玩家为目标"
+      "target_player": "标记玩家为目标",
+      "diplomacy": "外交管理",
+      "peace": "和谈与签署",
+      "wars": "战争与停战详情",
+      "call_ally": "邀请盟友参战",
+      "review_call": "处理援战邀请",
+      "request_independence": "请求独立",
+      "declare_independence": "宣布独立",
+      "release_subject": "释放傀儡国",
+      "demand_subjugation": "要求对方臣服",
+      "accept_subjugation": "接受臣服请求",
+      "reject_subjugation": "拒绝臣服请求",
+      "accept_independence": "同意独立请求",
+      "reject_independence": "拒绝独立请求"
     },
     "reason": {
       "unavailable": "当前无法使用",
@@ -1169,9 +1182,25 @@
       "tile_owned": "请选择未被占领的土地出生。",
       "transport_unavailable": "当前没有可用的运输船。",
       "donation_unavailable": "当前无法向该玩家派遣士兵。",
-      "attack_unavailable": "当前无法从此处发起进攻。"
+      "attack_unavailable": "当前无法从此处发起进攻。",
+      "player_defeated": "阵亡玩家无法执行外交操作。",
+      "truce": "双方处于停战期，可查看停战详情。",
+      "no_opposing_war": "尚未与该国交战，也没有待处理的共同和谈。",
+      "no_callable_war": "没有可邀请的战争：盟友可能已参战或正在等待答复。",
+      "independence_request_unavailable": "请求独立需要自治度达到 80% 且低于 100%，并等待已有请求和冷却结束。",
+      "independence_unavailable": "自治度达到 100% 后可直接和平独立。",
+      "subjugation_unavailable": "需要对方明显弱于你、双方满足附属关系条件，并且没有待处理请求或冷却。",
+      "call_chain": "通过援战加入的玩家不能继续邀请其他盟友参战。",
+      "call_conflicting_relation": "该盟友与敌方存在同盟、队伍、附属或停战关系。"
     },
-    "cooldown": "{seconds} 秒后可用"
+    "cooldown": "{seconds} 秒后可用",
+    "relation": {
+      "overlord": "对方是你的宗主；你的自治度：{autonomy}%",
+      "subject": "对方是你的傀儡；对方自治度：{autonomy}%",
+      "teammate": "同一队伍",
+      "ally": "同盟关系",
+      "neutral": "未结盟"
+    }
   },
   "war_panel": {
     "title": "外交",
@@ -1249,6 +1278,9 @@
     "event_default": "外交状态已更新。",
     "pending_responses": "待处理：{count} 项",
     "truce_time": "剩余 {time}",
-    "call_invite_label": "参战邀请"
+    "call_invite_label": "参战邀请",
+    "target_context": "{name} 的外交",
+    "show_all_wars": "查看全部战争",
+    "empty_target": "当前选择没有进行中的战争、和谈或停战；原战争可能已经结束。"
   }
 }

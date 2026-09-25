@@ -529,7 +529,20 @@
       "spawn": "Spawn here",
       "start_trade": "Start trade",
       "stop_trade": "Stop trade",
-      "target_player": "Target player"
+      "target_player": "Target player",
+      "diplomacy": "Manage diplomacy",
+      "peace": "Peace talks & signatures",
+      "wars": "War & truce details",
+      "call_ally": "Invite ally to war",
+      "review_call": "Review call to arms",
+      "request_independence": "Request independence",
+      "declare_independence": "Declare independence",
+      "release_subject": "Release puppet",
+      "demand_subjugation": "Demand subjugation",
+      "accept_subjugation": "Accept subjugation request",
+      "reject_subjugation": "Reject subjugation request",
+      "accept_independence": "Accept independence request",
+      "reject_independence": "Reject independence request"
     },
     "actions": "Actions",
     "cooldown": "Available in {seconds}s",
@@ -549,7 +562,23 @@
       "spawn_phase": "Available after the spawn phase.",
       "tile_owned": "Choose unclaimed land to spawn.",
       "transport_unavailable": "No transport ship is available.",
-      "unavailable": "Unavailable right now"
+      "unavailable": "Unavailable right now",
+      "player_defeated": "Defeated players cannot take diplomatic actions.",
+      "truce": "A truce is in effect. Open war details to review it.",
+      "no_opposing_war": "You are not at war with this country and have no shared peace talks awaiting signatures.",
+      "no_callable_war": "No eligible war: this ally may already be participating or awaiting a response.",
+      "independence_request_unavailable": "Requesting independence requires at least 80% autonomy, below 100%, with no pending request or cooldown.",
+      "independence_unavailable": "At 100% autonomy you can declare peaceful independence.",
+      "subjugation_unavailable": "The target must be substantially weaker, both countries must qualify for a subject relationship, and no request or cooldown may be pending.",
+      "call_chain": "Players who joined through a call to arms cannot invite further allies.",
+      "call_conflicting_relation": "This ally has an alliance, team, subject relationship, or truce with the opposing side."
+    },
+    "relation": {
+      "overlord": "Your overlord · Your autonomy: {autonomy}%",
+      "subject": "Your puppet · Their autonomy: {autonomy}%",
+      "teammate": "Same team",
+      "ally": "Allied",
+      "neutral": "Not allied"
     }
   },
   "control_panel": {
@@ -2493,7 +2522,10 @@
     "truce": "Truce ends in",
     "truce_time": "{time} remaining",
     "war_number": "War {number}",
-    "warships": "Hostile warships: {count}"
+    "warships": "Hostile warships: {count}",
+    "target_context": "Diplomacy with {name}",
+    "show_all_wars": "Show all wars",
+    "empty_target": "No active war, peace talks, or truce for this selection. The original war may have ended."
   },
   "win_modal": {
     "died": "You died",

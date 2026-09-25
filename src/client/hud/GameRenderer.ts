@@ -247,7 +247,7 @@ export function createRenderer(
     console.error("war diplomacy panel not found");
   }
   warDiplomacyPanel.game = game;
-  warDiplomacyPanel.eventBus = eventBus;
+  warDiplomacyPanel.initEventBus(eventBus);
 
   playerPanel.setRole(playerRole);
 
