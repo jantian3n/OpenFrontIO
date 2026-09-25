@@ -189,6 +189,50 @@ describe("war diplomacy offers and settlements", () => {
     expect(diplomacy.getWar(warId)?.status).toBe("truce");
   });
 
+  test("removes a dead signer and lets the final living signer settle", async () => {
+    const { diplomacy, warId, attacker, defender, teammate } = await makeWar({
+      attackerTeammate: true,
+    });
+    const proposalId = diplomacy.proposePeace(warId, attacker, {
+      kind: "whitePeace",
+    });
+    expect(proposalId).not.toBeNull();
+
+    teammate!.tiles().forEach((tile) => teammate!.relinquish(tile));
+    diplomacy.tick();
+
+    const proposal = diplomacy.getWar(warId)?.proposal;
+    expect(proposal).toBeDefined();
+    expect(
+      proposal?.signatures.map((signature) => signature.playerID),
+    ).not.toContain(teammate!.id());
+    expect(
+      proposal?.signatures.find(
+        (signature) => signature.playerID === defender.id(),
+      )?.status,
+    ).toBe("pending");
+    expect(diplomacy.answerPeace(warId, proposalId!, defender, true)).toBe(
+      true,
+    );
+    expect(diplomacy.getWar(warId)?.status).toBe("truce");
+  });
+
+  test("a live signer can answer before the next diplomacy tick prunes the dead signer", async () => {
+    const { diplomacy, warId, attacker, defender, teammate } = await makeWar({
+      attackerTeammate: true,
+    });
+    const proposalId = diplomacy.proposePeace(warId, attacker, {
+      kind: "whitePeace",
+    });
+    expect(proposalId).not.toBeNull();
+    teammate!.tiles().forEach((tile) => teammate!.relinquish(tile));
+
+    expect(diplomacy.answerPeace(warId, proposalId!, defender, true)).toBe(
+      true,
+    );
+    expect(diplomacy.getWar(warId)?.status).toBe("truce");
+  });
+
   test("bots vote deterministically when a peace proposal is opened", async () => {
     const first = await makeWar({ bot: true });
     const second = await makeWar({ bot: true });

@@ -255,16 +255,32 @@ export class WarDiplomacy {
           }
         }
       }
-      if (war.proposal !== undefined) {
-        const signerEliminated = war.proposal.signatures.some(
-          (signature) => !this.game.player(signature.playerID).isAlive(),
-        );
-        if (signerEliminated || now >= war.proposal.expiresAt) {
-          const reason = signerEliminated
-            ? "peaceProposalInvalidated"
-            : "peaceProposalExpired";
-          this.cancelProposal(war, reason);
+      const defeatedSide = war.sides.findIndex(
+        (side) => !side.participants.some((participant) => participant.isAlive),
+      );
+      if (defeatedSide !== -1) {
+        if (war.status !== "ended") {
+          this.endWar(war, defeatedSide === 0 ? 1 : 0);
           changed = true;
+        }
+        if (changed) this.emit(war);
+        continue;
+      }
+      if (war.proposal !== undefined) {
+        if (now >= war.proposal.expiresAt) {
+          this.cancelProposal(war, "peaceProposalExpired");
+          changed = true;
+        } else {
+          changed = this.removeDeadPeaceSigners(war) || changed;
+          if (
+            war.proposal !== undefined &&
+            war.proposal.signatures.every(
+              (signature) => signature.status === "accepted",
+            )
+          ) {
+            this.settleProposal(war);
+            changed = true;
+          }
         }
       }
       for (const call of war.calls) {
@@ -508,33 +524,26 @@ export class WarDiplomacy {
   ): boolean {
     const war = this._wars.get(warId);
     const proposal = war?.proposal;
-    const signature = proposal?.signatures.find(
-      (entry) => entry.playerID === responder.id(),
-    );
     if (
       war === undefined ||
       war.status !== "peacePending" ||
       proposal === undefined ||
       proposal.id !== proposalId ||
-      signature?.status !== "pending" ||
       !responder.isAlive()
     ) {
       return false;
     }
-    if (
-      this.game.ticks() >= proposal.expiresAt ||
-      proposal.signatures.some(
-        (entry) => !this.game.player(entry.playerID).isAlive(),
-      )
-    ) {
-      this.cancelProposal(
-        war,
-        this.game.ticks() >= proposal.expiresAt
-          ? "peaceProposalExpired"
-          : "peaceProposalInvalidated",
-        responder.id(),
-      );
+    if (this.game.ticks() >= proposal.expiresAt) {
+      this.cancelProposal(war, "peaceProposalExpired", responder.id());
       this.emit(war);
+      return false;
+    }
+    const removedDeadSigners = this.removeDeadPeaceSigners(war);
+    const signature = proposal.signatures.find(
+      (entry) => entry.playerID === responder.id(),
+    );
+    if (signature?.status !== "pending") {
+      if (removedDeadSigners) this.emit(war);
       return false;
     }
     if (!accepted) {
@@ -1178,6 +1187,44 @@ export class WarDiplomacy {
       this.game.ticks() + WAR_OFFER_COOLDOWN_TICKS,
     );
     this.addEvent(war, reason, actorID);
+  }
+
+  private removeDeadPeaceSigners(war: MutableWar): boolean {
+    const proposal = war.proposal;
+    if (proposal === undefined) return false;
+
+    const deadSigners = proposal.signatures.filter(
+      (signature) => !this.game.player(signature.playerID).isAlive(),
+    );
+    if (deadSigners.length === 0) return false;
+
+    const deadIDs = new Set(deadSigners.map((signature) => signature.playerID));
+    proposal.signatures = proposal.signatures.filter(
+      (signature) => !deadIDs.has(signature.playerID),
+    );
+    for (const signature of deadSigners) {
+      this.addEvent(war, "peaceSignerEliminated", signature.playerID);
+    }
+    return true;
+  }
+
+  private endWar(war: MutableWar, winningSide: 0 | 1): void {
+    if (war.status === "ended") return;
+
+    for (const call of war.calls
+      .filter((offer) => offer.status === "pending")
+      .sort((left, right) => left.id - right.id)) {
+      call.status = "cancelled";
+      this.addEvent(war, "callCancelled", call.inviterID, call.recipientID);
+    }
+    if (war.proposal !== undefined) {
+      this.cancelProposal(war, "peaceProposalInvalidated");
+    }
+    war.status = "ended";
+    const winnerID = war.sides[winningSide].participants.find(
+      (participant) => participant.isAlive,
+    )?.playerID;
+    this.addEvent(war, "warEnded", winnerID);
   }
 
   private expireCall(war: MutableWar, call: WarCallSnapshot): void {

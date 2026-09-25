@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import {
   ColoredTeams,
   Player,
@@ -231,6 +232,47 @@ describe("WarDiplomacy", () => {
     );
     expect(game.warDiplomacy().warsFor(attacker)).toEqual([]);
     expect(game.warDiplomacy().warsFor(defender)).toEqual([]);
+  });
+
+  test("ends when either side has no living participants", async () => {
+    const game = await setup("plains", {}, [
+      new PlayerInfo("attacker", PlayerType.Human, null, "attacker"),
+      new PlayerInfo("defender", PlayerType.Human, null, "defender"),
+      new PlayerInfo("ally", PlayerType.Human, null, "ally"),
+    ]);
+    const attacker = game.player("attacker");
+    const defender = game.player("defender");
+    const ally = game.player("ally");
+    attacker.conquer(game.ref(0, 0));
+    defender.conquer(game.ref(40, 40));
+    ally.conquer(game.ref(20, 20));
+    attacker.createAllianceRequest(ally)?.accept();
+    const diplomacy = game.warDiplomacy();
+    const warId = diplomacy.beginHostileAction(attacker, defender)!;
+    const callId = diplomacy.createCallToArms(warId, attacker, ally)!;
+    const proposalId = diplomacy.proposePeace(warId, attacker, {
+      kind: "whitePeace",
+    })!;
+
+    defender.tiles().forEach((tile) => defender.relinquish(tile));
+    const addUpdate = vi.spyOn(game, "addUpdate");
+    diplomacy.tick();
+
+    expect(diplomacy.getWar(warId)?.status).toBe("ended");
+    expect(diplomacy.getWar(warId)?.proposal).toBeUndefined();
+    expect(
+      diplomacy.getWar(warId)?.calls.find((call) => call.id === callId)?.status,
+    ).toBe("cancelled");
+    expect(diplomacy.createCallToArms(warId, attacker, ally)).toBeNull();
+    expect(
+      diplomacy.proposePeace(warId, attacker, { kind: "whitePeace" }),
+    ).toBeNull();
+    expect(diplomacy.answerPeace(warId, proposalId, attacker, true)).toBe(
+      false,
+    );
+    const updatesAfterEnding = addUpdate.mock.calls.length;
+    diplomacy.tick();
+    expect(addUpdate).toHaveBeenCalledTimes(updatesAfterEnding);
   });
 
   test("participant ordering and war hashes do not depend on player insertion order", async () => {
