@@ -135,11 +135,16 @@ export class WarDiplomacy {
   constructor(private readonly game: Game) {}
 
   canAttack(attacker: Player, target: Player): boolean {
-    if (attacker === target || this.hasBlockingRelation(attacker, target)) {
-      return false;
-    }
+    if (attacker === target) return false;
     const existing = this.findWarBetween(attacker.id(), target.id());
     if (existing?.status === "truce") return false;
+    if (
+      existing !== undefined &&
+      this.isIndependenceWarPair(existing, attacker, target)
+    ) {
+      return true;
+    }
+    if (this.hasBlockingRelation(attacker, target)) return false;
     if (existing !== undefined) return true;
     if (this.findWarOnSameSide(attacker.id(), target.id()) !== undefined) {
       return false;
@@ -169,22 +174,89 @@ export class WarDiplomacy {
     const defendingSide = this.expandSide(target);
     if (!this.canSidesFight(attackingSide, defendingSide)) return null;
 
+    return this.createWar(
+      attacker,
+      target,
+      attackingSide,
+      defendingSide,
+      "attacker",
+      "defender",
+    );
+  }
+
+  beginIndependenceWar(subject: Player, overlord: Player): number | null {
+    if (
+      !subject.isAlive() ||
+      !overlord.isAlive() ||
+      !subject.isSubjectOf(overlord)
+    ) {
+      return null;
+    }
+
+    const existing = this.findWarBetween(subject.id(), overlord.id());
+    if (existing !== undefined) {
+      return this.isIndependenceWarPair(existing, subject, overlord)
+        ? existing.id
+        : null;
+    }
+    if (this.findWarOnSameSide(subject.id(), overlord.id()) !== undefined) {
+      return null;
+    }
+
+    const subjectSide = this.expandIndependenceSubjectSide(subject);
+    const overlordSide = this.expandIndependenceOverlordSide(overlord, subject);
+    if (
+      !this.canIndependenceSidesFight(
+        subjectSide,
+        overlordSide,
+        subject,
+        overlord,
+      )
+    ) {
+      return null;
+    }
+
+    return this.createWar(
+      subject,
+      overlord,
+      subjectSide,
+      overlordSide,
+      "independence",
+      "defender",
+    );
+  }
+
+  isInIndependenceWar(subject: Player, overlord: Player): boolean {
+    const war = this.findWarBetween(subject.id(), overlord.id());
+    return (
+      war !== undefined && this.isIndependenceWarPair(war, subject, overlord)
+    );
+  }
+
+  private createWar(
+    attacker: Player,
+    defender: Player,
+    attackingSide: Player[],
+    defendingSide: Player[],
+    attackerReason: WarJoinReason,
+    defenderReason: WarJoinReason,
+  ): number {
     const id = this._nextWarID++;
     const createdAt = this.game.ticks();
     const attackerParticipants = this.makeParticipants(
       attackingSide,
       attacker,
-      target,
-      "attacker",
-      "defender",
+      defender,
+      attackerReason,
+      defenderReason,
       createdAt,
     );
     const defenderParticipants = this.makeParticipants(
       defendingSide,
       attacker,
-      target,
-      "attacker",
-      "defender",
+      defender,
+      attackerReason,
+      defenderReason,
       createdAt,
     );
     const war: MutableWar = {
@@ -199,7 +271,7 @@ export class WarDiplomacy {
       calls: [],
     };
     this._wars.set(id, war);
-    this.addEvent(war, "warStarted", attacker.id(), target.id());
+    this.addEvent(war, "warStarted", attacker.id(), defender.id());
     this.emit(war);
     return id;
   }
@@ -753,6 +825,20 @@ export class WarDiplomacy {
     return null;
   }
 
+  private participantReason(
+    war: MutableWar,
+    playerID: PlayerID,
+  ): WarJoinReason | null {
+    const side = this.sideIndex(war, playerID);
+    return (
+      (side === null
+        ? undefined
+        : war.sides[side].participants.find(
+            (participant) => participant.playerID === playerID,
+          )?.reason) ?? null
+    );
+  }
+
   private recalculateScores(war: MutableWar): boolean {
     const old = war.sides.map((side) => ({ ...side.score }));
     const territoryCounts: [number, number] = [0, 0];
@@ -867,6 +953,93 @@ export class WarDiplomacy {
     }
     return Array.from(sideMembers.values()).sort((a, b) =>
       a.id().localeCompare(b.id()),
+    );
+  }
+
+  private expandIndependenceSubjectSide(
+    subject: Player,
+    overlord: Player,
+  ): Player[] {
+    const alive = this.game.players().filter((player) => player.isAlive());
+    const teamMembers = alive.filter(
+      (player) => player === subject || player.isOnSameTeam(subject),
+    );
+    const members = new Map<PlayerID, Player>(
+      teamMembers.map((member) => [member.id(), member]),
+    );
+    for (const member of teamMembers) {
+      for (const dependent of member.subjects()) {
+        if (dependent.isAlive() && dependent !== overlord) {
+          members.set(dependent.id(), dependent);
+        }
+      }
+    }
+    return Array.from(members.values()).sort((a, b) =>
+      a.id().localeCompare(b.id()),
+    );
+  }
+
+  private expandIndependenceOverlordSide(
+    overlord: Player,
+    subject: Player,
+  ): Player[] {
+    return this.expandSide(overlord).filter((member) => member !== subject);
+  }
+
+  private canIndependenceSidesFight(
+    subjectSide: Player[],
+    overlordSide: Player[],
+    subject: Player,
+    overlord: Player,
+  ): boolean {
+    const subjectIDs = new Set(subjectSide.map((player) => player.id()));
+    const overlordIDs = new Set(overlordSide.map((player) => player.id()));
+    if (
+      !subjectIDs.has(subject.id()) ||
+      !overlordIDs.has(overlord.id()) ||
+      subjectIDs.size !== subjectSide.length ||
+      overlordIDs.size !== overlordSide.length ||
+      subjectSide.some((member) => overlordIDs.has(member.id()))
+    ) {
+      return false;
+    }
+
+    for (const subjectMember of subjectSide) {
+      for (const overlordMember of overlordSide) {
+        if (subjectMember === subject && overlordMember === overlord) {
+          if (this.isInTruceAcrossSides(subject.id(), overlord.id())) {
+            return false;
+          }
+          continue;
+        }
+        if (
+          this.hasBlockingRelation(subjectMember, overlordMember) ||
+          this.findWarOnSameSide(subjectMember.id(), overlordMember.id()) !==
+            undefined ||
+          this.findWarBetween(subjectMember.id(), overlordMember.id()) !==
+            undefined
+        ) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  private isIndependenceWarPair(
+    war: MutableWar,
+    subject: Player,
+    overlord: Player,
+  ): boolean {
+    const subjectSide = this.sideIndex(war, subject.id());
+    const overlordSide = this.sideIndex(war, overlord.id());
+    return (
+      (war.status === "active" || war.status === "peacePending") &&
+      subject.isSubjectOf(overlord) &&
+      this.participantReason(war, subject.id()) === "independence" &&
+      subjectSide !== null &&
+      overlordSide !== null &&
+      subjectSide !== overlordSide
     );
   }
 
@@ -1078,8 +1251,7 @@ export class WarDiplomacy {
       subject.isPuppet() &&
       overlord !== null &&
       overlord.isAlive() &&
-      this.sideIndex(war, subject.id()) !== null &&
-      this.sideIndex(war, subject.id()) === this.sideIndex(war, overlord.id())
+      this.isIndependenceWarPair(war, subject, overlord)
     );
   }
 

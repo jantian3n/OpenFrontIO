@@ -1328,6 +1328,15 @@ export class PlayerImpl implements Player {
     const request = requestorImpl.findOutgoingSubjectRequest(this, requestType);
     if (request === undefined) return false;
 
+    const startsIndependenceWar =
+      requestType === "independence" &&
+      requestorImpl.isSubjectOf(this) &&
+      requestorImpl._subjectInfo !== null &&
+      requestorImpl._subjectInfo.autonomy >=
+        SUBJECT_INDEPENDENCE_REQUEST_AUTONOMY &&
+      requestorImpl._subjectInfo.autonomy <
+        SUBJECT_PEACEFUL_INDEPENDENCE_AUTONOMY;
+
     requestorImpl._outgoingSubjectRequests =
       requestorImpl._outgoingSubjectRequests.filter((r) => r !== request);
     this.mg.addUpdate({
@@ -1335,6 +1344,9 @@ export class PlayerImpl implements Player {
       request: request.toUpdate(),
       accepted: false,
     });
+    if (startsIndependenceWar) {
+      this.mg.warDiplomacy().beginIndependenceWar(requestorImpl, this);
+    }
     return true;
   }
 
@@ -1491,6 +1503,15 @@ export class PlayerImpl implements Player {
   private puppetMayFight(other: Player): boolean {
     if (!this.isPuppet()) return true;
 
+    const overlord = this._overlord;
+    if (
+      overlord !== null &&
+      other === overlord &&
+      this.mg.warDiplomacy().isInIndependenceWar(this, overlord)
+    ) {
+      return true;
+    }
+
     const defensiveWar =
       other.hasRecentAggressionAgainst(this) ||
       this.incomingAttacks().some(
@@ -1498,7 +1519,6 @@ export class PlayerImpl implements Player {
       );
     if (defensiveWar) return true;
 
-    const overlord = this._overlord;
     if (overlord === null || !overlord.isAlive()) return false;
 
     const overlordWasAttacked =

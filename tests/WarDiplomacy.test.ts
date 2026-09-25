@@ -323,7 +323,7 @@ describe("war diplomacy offers and settlements", () => {
     expect(attacker.subjects()).toContain(defender);
   });
 
-  test("an independence clause releases only a participant puppet from its overlord", async () => {
+  test("rejects an independence clause outside the subject's own independence war", async () => {
     const game = await setup("plains");
     const overlord = addPlayer(
       game,
@@ -349,14 +349,58 @@ describe("war diplomacy offers and settlements", () => {
 
     const diplomacy = game.warDiplomacy();
     const warId = diplomacy.beginHostileAction(overlord, defender)!;
-    const proposalId = diplomacy.proposePeace(warId, overlord, {
+    expect(
+      diplomacy.proposePeace(warId, overlord, {
+        kind: "independence",
+        subjectId: puppet.id(),
+      }),
+    ).toBeNull();
+    expect(puppet.isSubject()).toBe(true);
+    expect(overlord.subjects()).toContain(puppet);
+  });
+
+  test("an independence treaty releases a subject only in its active independence war", async () => {
+    const game = await setup("plains");
+    const overlord = addPlayer(
+      game,
+      "overlord",
+      PlayerType.Human,
+      ColoredTeams.Red,
+    );
+    const subject = addPlayer(game, "subject");
+    overlord.conquer(game.ref(0, 0));
+    subject.conquer(game.ref(20, 20));
+    overlord.setTroops(100_000);
+    for (let x = 1; x <= 20; x++) overlord.conquer(game.ref(x, 0));
+    subject.setTroops(1);
+    expect(overlord.demandSubjugation(subject)).toBe(true);
+    expect(subject.acceptSubjectRequest(overlord, "subjugation")).toBe(true);
+    (subject as any)._subjectInfo.autonomy = 80;
+    expect(subject.requestIndependence(overlord)).toBe(true);
+    expect(overlord.rejectSubjectRequest(subject, "independence")).toBe(true);
+
+    const diplomacy = game.warDiplomacy();
+    const warId = diplomacy.warsFor(subject)[0]?.id;
+    expect(warId).toBeDefined();
+    expect(diplomacy.getWar(warId!)?.sides[0].participants).toContainEqual(
+      expect.objectContaining({
+        playerID: subject.id(),
+        reason: "independence",
+      }),
+    );
+    const proposalId = diplomacy.proposePeace(warId!, overlord, {
       kind: "independence",
-      subjectId: puppet.id(),
-    })!;
-    expect(diplomacy.answerPeace(warId, proposalId, defender, true)).toBe(true);
-    expect(diplomacy.answerPeace(warId, proposalId, puppet, true)).toBe(true);
-    expect(puppet.isSubject()).toBe(false);
-    expect(overlord.subjects()).not.toContain(puppet);
+      subjectId: subject.id(),
+    });
+
+    expect(proposalId).not.toBeNull();
+    expect(subject.isSubjectOf(overlord)).toBe(true);
+    expect(diplomacy.answerPeace(warId!, proposalId!, subject, true)).toBe(
+      true,
+    );
+    expect(subject.isSubject()).toBe(false);
+    expect(overlord.subjects()).not.toContain(subject);
+    expect(diplomacy.getWar(warId!)?.status).toBe("truce");
   });
 
   test("expired proposals enter a deterministic cooldown and truce ends on its deadline", async () => {

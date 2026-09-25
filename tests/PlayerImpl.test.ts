@@ -300,6 +300,34 @@ describe("PlayerImpl", () => {
       );
       expect(player.rejectSubjectRequest(other, "independence")).toBe(true);
       expect(other.isSubject()).toBe(true);
+      const independenceWar = game.warDiplomacy().warsFor(other)[0];
+      expect(independenceWar?.status).toBe("active");
+      expect(independenceWar?.sides[0].participants).toContainEqual(
+        expect.objectContaining({
+          playerID: other.id(),
+          reason: "independence",
+        }),
+      );
+      expect(independenceWar?.sides[1].participants).toContainEqual(
+        expect.objectContaining({ playerID: player.id() }),
+      );
+      expect(other.canAttackPlayer(player)).toBe(true);
+      const unrelated = game.addPlayer(
+        new PlayerInfo("unrelated", PlayerType.Bot, null, "unrelated"),
+      );
+      unrelated.conquer(game.ref(40, 40));
+      expect(other.canAttackPlayer(unrelated)).toBe(false);
+
+      const whitePeaceId = game
+        .warDiplomacy()
+        .proposePeace(independenceWar!.id, player, { kind: "whitePeace" });
+      expect(whitePeaceId).not.toBeNull();
+      expect(
+        game
+          .warDiplomacy()
+          .answerPeace(independenceWar!.id, whitePeaceId!, other, true),
+      ).toBe(true);
+      expect(other.canAttackPlayer(player)).toBe(false);
 
       (other as any)._subjectInfo.autonomy = 100;
       expect(other.canDeclareIndependence()).toBe(true);
