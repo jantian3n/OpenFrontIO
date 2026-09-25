@@ -34,9 +34,9 @@ import {
   IMAGE_ICON_KIND,
 } from "../PlayerIcons";
 import { ImmunityBarVisibleEvent } from "./ImmunityTimer";
-import { CloseRadialMenuEvent } from "./RadialMenu";
 import "./RelationSmiley";
 import { SpawnBarVisibleEvent } from "./SpawnTimer";
+import { CloseContextMenuEvent } from "./TextContextMenu";
 const soldierIconAquarius = assetUrl("images/SoldierIconAquarius.svg");
 const allianceIcon = assetUrl("images/AllianceIcon.svg");
 const traitorIcon = assetUrl("images/TraitorIcon.svg");
@@ -113,7 +113,7 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
       this.maybeShow(e.x, e.y),
     );
     this.eventBus.on(TouchEvent, (e: TouchEvent) => this.maybeShow(e.x, e.y));
-    this.eventBus.on(CloseRadialMenuEvent, () => this.hide());
+    this.eventBus.on(CloseContextMenuEvent, () => this.hide());
     this.eventBus.on(SpawnBarVisibleEvent, (e) => {
       this.spawnBarVisible = e.visible;
     });

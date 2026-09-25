@@ -70,6 +70,8 @@ describe("TransportShipExecution war diplomacy", () => {
     const boat = attacker.units(UnitType.TransportShip)[0];
     expect(boat).toBeDefined();
     const destination = boat.targetTile();
+    if (destination === undefined)
+      throw new Error("Transport has no target tile");
     expect(game.owner(destination).id()).toBe(defender.id());
     const warId = game.warDiplomacy().warsFor(attacker)[0]?.id;
     expect(warId).toBeDefined();
@@ -99,6 +101,8 @@ describe("TransportShipExecution war diplomacy", () => {
     const boat = attacker.units(UnitType.TransportShip)[0];
     expect(boat).toBeDefined();
     const destination = boat.targetTile();
+    if (destination === undefined)
+      throw new Error("Transport has no target tile");
     const warId = game.warDiplomacy().warsFor(attacker)[0]?.id;
     expect(warId).toBeDefined();
     const proposalId = game.warDiplomacy().proposePeace(warId!, attacker, {

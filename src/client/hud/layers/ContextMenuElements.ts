@@ -22,7 +22,6 @@ import { ChatIntegration } from "./ChatIntegration";
 import { EmojiTable } from "./EmojiTable";
 import { PlayerActionHandler } from "./PlayerActionHandler";
 import { PlayerPanel } from "./PlayerPanel";
-import { TooltipItem } from "./RadialMenu";
 
 import { EventBus } from "../../../core/EventBus";
 import {
@@ -67,9 +66,11 @@ export interface MenuElement {
   text?: string;
   fontSize?: string;
   tooltipItems?: TooltipItem[];
-  tooltipKeys?: TooltipKey[];
+  tooltipKeys?: TooltipKey[] | ((params: MenuElementParams) => TooltipKey[]);
 
   cooldown?: (params: MenuElementParams) => number;
+  group?: "primary" | "diplomacy" | "resources" | "trade" | "other";
+  unavailableReason?: (params: MenuElementParams) => TooltipKey | null;
   disabled: (params: MenuElementParams) => boolean;
   action?: (params: MenuElementParams) => void; // For leaf items that perform actions
   subMenu?: (params: MenuElementParams) => MenuElement[]; // For non-leaf items that open submenus
@@ -85,9 +86,9 @@ export interface TooltipKey {
   params?: Record<string, string | number>;
 }
 
-export interface CenterButtonElement {
-  disabled: (params: MenuElementParams) => boolean;
-  action: (params: MenuElementParams) => void;
+export interface TooltipItem {
+  text: string;
+  className: string;
 }
 
 export const COLORS = {
@@ -151,6 +152,7 @@ function isDisconnectedTarget(params: MenuElementParams): boolean {
 const infoChatElement: MenuElement = {
   id: "info_chat",
   name: "chat",
+  group: "other",
   disabled: () => false,
   color: COLORS.chat.default,
   icon: chatIcon,
@@ -169,6 +171,7 @@ const infoChatElement: MenuElement = {
 const allyTargetElement: MenuElement = {
   id: "ally_target",
   name: "target",
+  group: "other",
   disabled: (params: MenuElementParams): boolean => {
     if (params.selected === null) return true;
     return !params.playerActions.interaction?.canTarget;
@@ -185,6 +188,7 @@ const allyTargetElement: MenuElement = {
 const allyTradeElement: MenuElement = {
   id: "ally_trade",
   name: "trade",
+  group: "trade",
   disabled: (params: MenuElementParams) =>
     !!params.playerActions?.interaction?.canEmbargo,
   displayed: (params: MenuElementParams) =>
@@ -201,6 +205,7 @@ const allyTradeElement: MenuElement = {
 const allyEmbargoElement: MenuElement = {
   id: "ally_embargo",
   name: "embargo",
+  group: "trade",
   disabled: (params: MenuElementParams) =>
     !params.playerActions?.interaction?.canEmbargo,
   displayed: (params: MenuElementParams) =>
@@ -216,6 +221,7 @@ const allyEmbargoElement: MenuElement = {
 const allyRequestElement: MenuElement = {
   id: "ally_request",
   name: "request",
+  group: "diplomacy",
   disabled: (params: MenuElementParams) =>
     !params.playerActions?.interaction?.canSendAllianceRequest,
   displayed: (params: MenuElementParams) =>
@@ -234,6 +240,7 @@ const allyRequestElement: MenuElement = {
 const allyExtendElement: MenuElement = {
   id: "ally_extend",
   name: "extend",
+  group: "diplomacy",
   displayed: (params: MenuElementParams) =>
     !!params.playerActions?.interaction?.allianceInfo?.inExtensionWindow,
   disabled: (params: MenuElementParams) =>
@@ -264,6 +271,7 @@ const allyExtendElement: MenuElement = {
 const allyBreakElement: MenuElement = {
   id: "ally_break",
   name: "break",
+  group: "diplomacy",
   disabled: (params: MenuElementParams) =>
     !params.playerActions?.interaction?.canBreakAlliance,
   displayed: (params: MenuElementParams) =>
@@ -286,6 +294,7 @@ const allyBreakElement: MenuElement = {
 const allyDonateGoldElement: MenuElement = {
   id: "ally_donate_gold",
   name: "donate gold",
+  group: "resources",
   disabled: (params: MenuElementParams) =>
     !params.playerActions?.interaction?.canDonateGold,
   color: COLORS.ally,
@@ -300,6 +309,7 @@ const allyDonateGoldElement: MenuElement = {
 const allyDonateTroopsElement: MenuElement = {
   id: "ally_donate_troops",
   name: "donate troops",
+  group: "resources",
   disabled: (params: MenuElementParams) =>
     !params.playerActions?.interaction?.canDonateTroops,
   color: COLORS.ally,
@@ -314,6 +324,7 @@ const allyDonateTroopsElement: MenuElement = {
 const infoPlayerElement: MenuElement = {
   id: "info_player",
   name: "player",
+  group: "other",
   disabled: () => false,
   color: COLORS.info,
   icon: infoIcon,
@@ -326,6 +337,7 @@ const infoPlayerElement: MenuElement = {
 const infoEmojiElement: MenuElement = {
   id: "info_emoji",
   name: "emoji",
+  group: "other",
   disabled: () => false,
   color: COLORS.infoEmoji,
   icon: emojiIcon,
@@ -379,6 +391,7 @@ const infoEmojiElement: MenuElement = {
 export const infoMenuElement: MenuElement = {
   id: Slot.Info,
   name: "info",
+  group: "other",
   disabled: (params: MenuElementParams) =>
     !params.selected || params.game.inSpawnPhase(),
   icon: infoIcon,
@@ -434,6 +447,7 @@ function createMenuElements(
         name: item.key
           ? item.key.replace("unit_type.", "")
           : item.unitType.toString(),
+        group: "primary",
         disabled: (p: MenuElementParams) =>
           !p.buildMenu.canBuildOrUpgrade(item),
         color: (p: MenuElementParams) =>
@@ -506,6 +520,7 @@ function createMenuElements(
               name: translateText("build_menu.upgrade_amount", {
                 amount: amount.toString(),
               }),
+              group: "primary",
               text: translateText("build_menu.upgrade_amount", {
                 amount: amount.toString(),
               }),
@@ -592,7 +607,12 @@ function createMenuElements(
 export const attackMenuElement: MenuElement = {
   id: Slot.Attack,
   name: "radial_attack",
+  group: "primary",
   disabled: (params: MenuElementParams) => params.game.inSpawnPhase(),
+  unavailableReason: (params) =>
+    params.game.inSpawnPhase()
+      ? { key: "context_menu.reason.spawn_phase", className: "" }
+      : null,
   icon: swordIcon,
   color: COLORS.attack,
 
@@ -605,6 +625,7 @@ export const attackMenuElement: MenuElement = {
 const donateGoldRadialElement: MenuElement = {
   id: Slot.Attack,
   name: "radial_donate_gold",
+  group: "resources",
   disabled: (params: MenuElementParams) =>
     params.game.inSpawnPhase() ||
     !params.playerActions?.interaction?.canDonateGold,
@@ -623,6 +644,7 @@ const donateGoldRadialElement: MenuElement = {
 export const deleteUnitElement: MenuElement = {
   id: Slot.Delete,
   name: "delete",
+  group: "primary",
   cooldown: (params: MenuElementParams) => params.myPlayer.deleteUnitCooldown(),
   disabled: (params: MenuElementParams) => {
     const tileOwner = params.game.owner(params.tile);
@@ -697,7 +719,12 @@ export const deleteUnitElement: MenuElement = {
 export const buildMenuElement: MenuElement = {
   id: Slot.Build,
   name: "build",
+  group: "primary",
   disabled: (params: MenuElementParams) => params.game.inSpawnPhase(),
+  unavailableReason: (params) =>
+    params.game.inSpawnPhase()
+      ? { key: "context_menu.reason.spawn_phase", className: "" }
+      : null,
   icon: buildIcon,
   color: COLORS.build,
 
@@ -710,10 +737,17 @@ export const buildMenuElement: MenuElement = {
 export const boatMenuElement: MenuElement = {
   id: Slot.Boat,
   name: "boat",
+  group: "primary",
   disabled: (params: MenuElementParams) =>
     !params.playerActions.buildableUnits.some(
       (unit) => unit.type === UnitType.TransportShip && unit.canBuild,
     ),
+  unavailableReason: (params) =>
+    params.playerActions.buildableUnits.some(
+      (unit) => unit.type === UnitType.TransportShip && unit.canBuild,
+    )
+      ? null
+      : { key: "context_menu.reason.transport_unavailable", className: "" },
   icon: boatIcon,
   color: COLORS.boat,
 
@@ -724,7 +758,10 @@ export const boatMenuElement: MenuElement = {
   },
 };
 
-export const centerButtonElement: CenterButtonElement = {
+export const mainActionMenuElement: MenuElement = {
+  id: "main_action",
+  name: "context_menu.action.attack_now",
+  group: "primary",
   disabled: (params: MenuElementParams): boolean => {
     const tileOwner = params.game.owner(params.tile);
     const isLand = params.game.isLand(params.tile);
@@ -746,6 +783,29 @@ export const centerButtonElement: CenterButtonElement = {
     }
 
     return !params.playerActions.canAttack;
+  },
+  unavailableReason: (params) => {
+    const tileOwner = params.game.owner(params.tile);
+    if (!params.game.isLand(params.tile)) {
+      return { key: "context_menu.reason.land_required", className: "" };
+    }
+    if (params.game.inSpawnPhase()) {
+      if (params.game.config().isRandomSpawn()) {
+        return { key: "context_menu.reason.random_spawn", className: "" };
+      }
+      if (tileOwner.isPlayer()) {
+        return { key: "context_menu.reason.tile_owned", className: "" };
+      }
+      return null;
+    }
+    if (isFriendlyTarget(params) && !isDisconnectedTarget(params)) {
+      return params.playerActions.interaction?.canDonateTroops
+        ? null
+        : { key: "context_menu.reason.donation_unavailable", className: "" };
+    }
+    return params.playerActions.canAttack
+      ? null
+      : { key: "context_menu.reason.attack_unavailable", className: "" };
   },
   action: (params: MenuElementParams) => {
     if (params.game.inSpawnPhase()) {
@@ -802,6 +862,7 @@ export const rootMenuElement: MenuElement = {
       isFriendlyTarget(params) && !isDisconnected && !hasBuildableAttacks;
 
     const menuItems: (MenuElement | null)[] = [
+      mainActionMenuElement,
       infoMenuElement,
       ...(isOwnTerritory
         ? [deleteUnitElement, allyRequestElement, buildMenuElement]

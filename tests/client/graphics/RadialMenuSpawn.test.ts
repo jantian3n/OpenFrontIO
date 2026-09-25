@@ -13,13 +13,13 @@ vi.mock("../../../src/client/Utils", () => ({
 }));
 
 import {
-  centerButtonElement,
+  mainActionMenuElement,
   MenuElementParams,
-} from "../../../src/client/hud/layers/RadialMenuElements";
+} from "../../../src/client/hud/layers/ContextMenuElements";
 import { TileRef } from "../../../src/core/game/GameMap";
 
-describe("RadialMenu center button - spawn phase", () => {
-  it("clicking the center button during the spawn phase spawns on the tile", () => {
+describe("Text context menu main action - spawn phase", () => {
+  it("activating the main action during the spawn phase spawns on the tile", () => {
     const tile = 42 as TileRef;
     const handleSpawn = vi.fn();
     const handleAttack = vi.fn();
@@ -32,7 +32,7 @@ describe("RadialMenu center button - spawn phase", () => {
       closeMenu,
     } as unknown as MenuElementParams;
 
-    centerButtonElement.action(params);
+    mainActionMenuElement.action!(params);
 
     expect(handleSpawn).toHaveBeenCalledExactlyOnceWith(tile);
     expect(handleAttack).not.toHaveBeenCalled();

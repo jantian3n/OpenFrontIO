@@ -3,7 +3,7 @@ import { SendQuickChatEvent } from "../../Transport";
 import { translateText } from "../../Utils";
 import { GameView, PlayerView } from "../../view";
 import { ChatModal, QuickChatPhrase, quickChatPhrases } from "./ChatModal";
-import { COLORS, MenuElement, MenuElementParams } from "./RadialMenuElements";
+import { COLORS, MenuElement, MenuElementParams } from "./ContextMenuElements";
 
 export class ChatIntegration {
   private ctModal: ChatModal;
@@ -89,7 +89,6 @@ export class ChatIntegration {
         disabled: () => false,
         text: categoryTranslation,
         color: categoryColor,
-        _action: () => {}, // Empty action placeholder for RadialMenu
         subMenu: () => phraseItems,
       };
     });

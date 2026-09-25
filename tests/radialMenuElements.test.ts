@@ -16,7 +16,7 @@ import {
   COLORS,
   rootMenuElement,
   type MenuElementParams,
-} from "../src/client/hud/layers/RadialMenuElements";
+} from "../src/client/hud/layers/ContextMenuElements";
 
 // Minimal stubs to satisfy types used in rootMenuElement.subMenu and allyBreak actions
 const makePlayer = (
@@ -80,7 +80,7 @@ const makeParams = (opts?: Partial<MenuElementParams>): MenuElementParams => {
 const findAllyBreak = (items: any[]) =>
   items.find((i) => i && i.id === "ally_break");
 
-describe("RadialMenuElements ally break", () => {
+describe("ContextMenuElements ally break", () => {
   test("shows break option with correct color when allied", () => {
     const params = makeParams();
     const items = rootMenuElement.subMenu!(params);

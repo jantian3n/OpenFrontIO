@@ -57,7 +57,7 @@ const COAST_STEPS = new Set(["send_boat", "buy_port"]);
 /**
  * Steps with a `tutorial.step_touch.*` variant: their desktop text leans on
  * hotkeys, clicks and the hotbar (hidden below lg), so touch devices get the
- * tap → radial menu route instead.
+ * tap → context menu route instead.
  */
 const TOUCH_TEXT_STEPS = new Set([
   "spawn",

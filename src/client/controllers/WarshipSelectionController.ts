@@ -209,7 +209,7 @@ export class WarshipSelectionController implements Controller {
 
   /**
    * Touch handler mirroring mouse-up. On dry land with no selection, falls
-   * back to opening the radial menu.
+   * back to opening the text context menu.
    */
   private onTouch(event: TouchEvent) {
     const cell = this.transformHandler.screenToWorldCoordinates(

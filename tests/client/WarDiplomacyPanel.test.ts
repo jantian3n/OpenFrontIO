@@ -1,7 +1,8 @@
 import { SendWarDiplomacyIntentEvent } from "../../src/client/Transport";
 import { WarDiplomacyPanel } from "../../src/client/hud/layers/WarDiplomacyPanel";
-import type { GameView, PlayerView } from "../../src/client/view";
+import type { GameView, PlayerView, UnitView } from "../../src/client/view";
 import { EventBus } from "../../src/core/EventBus";
+import { UnitType } from "../../src/core/game/Game";
 import type { WarSnapshot } from "../../src/core/game/WarDiplomacy";
 
 vi.mock("../../src/client/Utils", async (importOriginal) => ({
@@ -10,11 +11,19 @@ vi.mock("../../src/client/Utils", async (importOriginal) => ({
     params ? `${key}|${Object.values(params).join(",")}` : key,
 }));
 
-function player(id: string, name: string, gold = 1000): PlayerView {
+function player(
+  id: string,
+  name: string,
+  gold = 1000,
+  friendlyIDs: string[] = [id],
+): PlayerView {
   return {
     id: () => id,
     smallID: () => Number(id.replace(/\D/g, "")) || 1,
     displayName: () => name,
+    isPlayer: () => true,
+    isFriendly: (other: PlayerView) =>
+      other.id() !== id && friendlyIDs.includes(other.id()),
     isAlive: () => true,
     gold: () => BigInt(gold),
     goldEarned: () => 250,
@@ -65,13 +74,23 @@ function war(overrides: Partial<WarSnapshot> = {}): WarSnapshot {
   };
 }
 
-function setupPanel(wars: WarSnapshot[] = [], mine = player("p1", "Aster")) {
+function setupPanel(
+  wars: WarSnapshot[] = [],
+  mine = player("p1", "Aster"),
+  gameOverrides: Partial<GameView> = {},
+) {
   const game = {
     wars: () => wars,
     ticks: () => 100,
     myPlayer: () => mine,
+    units: () => [],
+    owner: () => ({ isPlayer: () => false }),
+    neighbors4: () => 0,
+    circleSearch: () => new Set(),
+    config: () => ({ nukeMagnitudes: () => ({ outer: 0 }) }),
     player: (id: string) =>
       id === "p1" ? mine : player(id, id === "p2" ? "Boreal" : `Player ${id}`),
+    ...gameOverrides,
   } as unknown as GameView;
   const eventBus = new EventBus();
   const panel = new WarDiplomacyPanel();
@@ -79,6 +98,31 @@ function setupPanel(wars: WarSnapshot[] = [], mine = player("p1", "Aster")) {
   panel.eventBus = eventBus;
   document.body.append(panel);
   return { panel, eventBus };
+}
+
+function visibleUnit(options: {
+  type: UnitType;
+  owner: PlayerView;
+  tile?: number;
+  target?: number;
+  active?: boolean;
+  retreating?: boolean;
+  transportRetreating?: boolean;
+  inCombat?: boolean;
+}): UnitView {
+  return {
+    type: () => options.type,
+    owner: () => options.owner,
+    tile: () => options.tile ?? 0,
+    targetTile: () => options.target,
+    isActive: () => options.active ?? true,
+    isInCombat: () => options.inCombat ?? false,
+    state: { retreating: options.retreating ?? false },
+    transportShipState: () => ({
+      isRetreating: options.transportRetreating ?? false,
+      troops: 10,
+    }),
+  } as unknown as UnitView;
 }
 
 describe("WarDiplomacyPanel", () => {
@@ -119,6 +163,85 @@ describe("WarDiplomacyPanel", () => {
     expect(panel.textContent).toContain("war_panel.treasury");
     expect(panel.textContent).toContain("war_panel.defense");
     expect(panel.textContent).toContain("war_panel.no_visible_threats");
+  });
+
+  it("summarizes active visible threats by class", async () => {
+    const ally = player("p3", "Ally", 1000, ["p1", "p3"]);
+    const mine = player("p1", "Aster", 1000, ["p1", "p3"]);
+    const enemy = player("p2", "Boreal");
+    const units = [
+      visibleUnit({ type: UnitType.TransportShip, owner: enemy, target: 10 }),
+      visibleUnit({
+        type: UnitType.TransportShip,
+        owner: enemy,
+        target: 10,
+        transportRetreating: true,
+      }),
+      visibleUnit({ type: UnitType.TransportShip, owner: enemy, target: 11 }),
+      visibleUnit({ type: UnitType.TransportShip, owner: ally, target: 10 }),
+      visibleUnit({ type: UnitType.Warship, owner: enemy, tile: 20 }),
+      visibleUnit({
+        type: UnitType.Warship,
+        owner: enemy,
+        tile: 30,
+        inCombat: true,
+      }),
+      visibleUnit({
+        type: UnitType.Warship,
+        owner: enemy,
+        tile: 20,
+        retreating: true,
+      }),
+      visibleUnit({
+        type: UnitType.AtomBomb,
+        owner: enemy,
+        target: 40,
+      }),
+      visibleUnit({
+        type: UnitType.HydrogenBomb,
+        owner: enemy,
+        target: 40,
+        active: false,
+      }),
+    ];
+    const { panel } = setupPanel(
+      [war()],
+      {
+        ...mine,
+        incomingAttacks: () => [
+          { retreating: false, troops: 100 },
+          { retreating: true, troops: 200 },
+        ],
+      } as unknown as PlayerView,
+      {
+        units: () => units,
+        owner: (tile) => (tile === 10 ? mine : enemy),
+        neighbors4: (tile, out) => {
+          if (tile !== 20) return 0;
+          out[0] = 10;
+          return 1;
+        },
+        circleSearch: (_target, _radius, filter) =>
+          filter?.(10, 0) ? new Set([10]) : new Set(),
+        config: () =>
+          ({
+            nukeMagnitudes: () => ({ inner: 12, outer: 30 }),
+          }) as unknown as ReturnType<GameView["config"]>,
+      },
+    );
+
+    await panel.updateComplete;
+    panel
+      .querySelector<HTMLButtonElement>(
+        "[aria-controls='war-diplomacy-content']",
+      )!
+      .click();
+    await panel.updateComplete;
+
+    expect(panel.textContent).toContain("war_panel.land_attacks|1");
+    expect(panel.textContent).toContain("war_panel.landings|1");
+    expect(panel.textContent).toContain("war_panel.warships|2");
+    expect(panel.textContent).toContain("war_panel.nukes|1");
   });
 
   it("sends call-to-arms accept and reject intents", async () => {

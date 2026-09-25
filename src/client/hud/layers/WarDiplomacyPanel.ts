@@ -1,6 +1,8 @@
 import { html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import type { EventBus } from "../../../core/EventBus";
+import { UnitType } from "../../../core/game/Game";
+import type { TileRef } from "../../../core/game/GameMap";
 import type { WarClause, WarSnapshot } from "../../../core/game/WarDiplomacy";
 import {
   WAR_PUPPET_SCORE_THRESHOLD,
@@ -12,6 +14,82 @@ import { renderDuration, renderNumber, translateText } from "../../Utils";
 import type { GameView, PlayerView } from "../../view";
 
 type PeaceClauseKind = WarClause["kind"];
+
+interface VisibleThreatSummary {
+  landAttacks: number;
+  landAttackTroops: number;
+  landings: number;
+  warships: number;
+  nukes: number;
+}
+
+function summarizeVisibleThreats(
+  game: GameView,
+  player: PlayerView,
+): VisibleThreatSummary {
+  const incomingAttacks = player
+    .incomingAttacks()
+    .filter((attack) => !attack.retreating);
+  const ownedTerritory = (tile: TileRef): boolean => {
+    const owner = game.owner(tile);
+    return owner.isPlayer() && owner.id() === player.id();
+  };
+  const hasOwnedNeighbor = (tile: TileRef): boolean => {
+    const neighbors: TileRef[] = [0, 0, 0, 0];
+    const count = game.neighbors4(tile, neighbors);
+    for (let i = 0; i < count; i++) {
+      if (ownedTerritory(neighbors[i])) return true;
+    }
+    return false;
+  };
+
+  let landings = 0;
+  let warships = 0;
+  let nukes = 0;
+  for (const unit of game.units()) {
+    if (!unit.isActive() || unit.state.retreating) continue;
+    const owner = unit.owner();
+    if (owner.id() === player.id() || owner.isFriendly(player)) continue;
+
+    switch (unit.type()) {
+      case UnitType.TransportShip: {
+        if (unit.transportShipState().isRetreating) continue;
+        const target = unit.targetTile();
+        if (target !== undefined && ownedTerritory(target)) landings++;
+        break;
+      }
+      case UnitType.Warship:
+        if (unit.isInCombat() || hasOwnedNeighbor(unit.tile())) warships++;
+        break;
+      case UnitType.AtomBomb:
+      case UnitType.HydrogenBomb:
+      case UnitType.MIRV:
+      case UnitType.MIRVWarhead: {
+        const target = unit.targetTile();
+        if (target === undefined) break;
+        const radius = game.config().nukeMagnitudes(unit.type()).outer;
+        if (
+          radius > 0 &&
+          game.circleSearch(target, radius, ownedTerritory).size > 0
+        ) {
+          nukes++;
+        }
+        break;
+      }
+    }
+  }
+
+  return {
+    landAttacks: incomingAttacks.length,
+    landAttackTroops: incomingAttacks.reduce(
+      (sum, attack) => sum + attack.troops,
+      0,
+    ),
+    landings,
+    warships,
+    nukes,
+  };
+}
 
 @customElement("war-diplomacy-panel")
 export class WarDiplomacyPanel extends LitElement implements Controller {
@@ -706,8 +784,13 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
   private renderVisibleThreats() {
     const my = this.game.myPlayer();
     if (!my) return html``;
-    const attacks = my.incomingAttacks().filter((attack) => !attack.retreating);
-    const troops = attacks.reduce((sum, attack) => sum + attack.troops, 0);
+    const threats = summarizeVisibleThreats(this.game, my);
+    const hasThreats =
+      threats.landAttacks +
+        threats.landings +
+        threats.warships +
+        threats.nukes >
+      0;
     return html`<section
       class="mt-3 rounded-xl border border-rose-300/10 bg-rose-300/[0.04] p-3"
       aria-label=${translateText("war_panel.defense")}
@@ -715,16 +798,41 @@ export class WarDiplomacyPanel extends LitElement implements Controller {
       <h3 class="text-xs font-semibold uppercase tracking-wide text-rose-100">
         ${translateText("war_panel.defense")}
       </h3>
-      ${attacks.length === 0
+      ${!hasThreats
         ? html`<p class="mt-2 text-xs text-zinc-400">
             ${translateText("war_panel.no_visible_threats")}
           </p>`
-        : html`<p class="mt-2 text-sm text-zinc-200">
-            ${translateText("war_panel.visible_attacks", {
-              count: attacks.length,
-              troops: renderNumber(troops),
-            })}
-          </p>`}
+        : html`<ul class="mt-2 space-y-1 text-sm text-zinc-200">
+            ${threats.landAttacks > 0
+              ? html`<li>
+                  ${translateText("war_panel.land_attacks", {
+                    count: threats.landAttacks,
+                    troops: renderNumber(threats.landAttackTroops),
+                  })}
+                </li>`
+              : html``}
+            ${threats.landings > 0
+              ? html`<li>
+                  ${translateText("war_panel.landings", {
+                    count: threats.landings,
+                  })}
+                </li>`
+              : html``}
+            ${threats.warships > 0
+              ? html`<li>
+                  ${translateText("war_panel.warships", {
+                    count: threats.warships,
+                  })}
+                </li>`
+              : html``}
+            ${threats.nukes > 0
+              ? html`<li>
+                  ${translateText("war_panel.nukes", {
+                    count: threats.nukes,
+                  })}
+                </li>`
+              : html``}
+          </ul>`}
     </section>`;
   }
 

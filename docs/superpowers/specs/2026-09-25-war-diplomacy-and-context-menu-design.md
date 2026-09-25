@@ -1,6 +1,6 @@
 # War Diplomacy Integrity and Text Context Menu
 
-**Status:** Draft for user review
+**Status:** Approved for implementation by user on 2026-09-25
 **Date:** 2026-09-25
 
 ## Goal

@@ -706,7 +706,7 @@ export class HelpModal extends BaseModal {
               <h3
                 class="text-xl font-bold uppercase tracking-widest text-white/90"
               >
-                ${translateText("help_modal.radial_title")}
+                ${translateText("help_modal.context_menu_title")}
               </h3>
               <div
                 class="flex-1 h-px bg-gradient-to-r from-blue-500/50 to-transparent"
@@ -716,77 +716,83 @@ export class HelpModal extends BaseModal {
             <div
               class="bg-black/20 rounded-xl border border-white/10 p-6 flex flex-col md:flex-row gap-6 hover:bg-white/5 transition-colors"
             >
-              <div class="flex flex-col gap-4 shrink-0">
-                <img
-                  src=${assetUrl("images/helpModal/radialMenu2.webp")}
-                  alt="Radial Menu"
-                  class="rounded-lg shadow-lg border border-white/20 max-w-[200px]"
-                  loading="lazy"
-                />
-                <img
-                  src=${assetUrl("images/helpModal/radialMenuAlly.webp")}
-                  alt="Radial Menu Ally"
-                  class="rounded-lg shadow-lg border border-white/20 max-w-[200px]"
-                  loading="lazy"
-                />
+              <div class="w-full max-w-xs shrink-0 rounded-xl border border-cyan-200/20 bg-[#071522] p-3 shadow-xl shadow-black/30">
+                <div class="mb-3 border-b border-white/10 px-2 pb-3">
+                  <div class="text-sm font-semibold text-sky-100">
+                    ${translateText("context_menu.actions")}
+                  </div>
+                  <div class="mt-1 text-[10px] uppercase tracking-[0.18em] text-slate-400">
+                    OpenFront · Actions
+                  </div>
+                </div>
+                <div class="space-y-2 text-xs">
+                  <div class="text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-300">
+                    ${translateText("context_menu.group.primary")}
+                  </div>
+                  <div class="rounded-lg border border-cyan-300/20 bg-cyan-300/10 px-3 py-2 text-white">
+                    ${translateText("context_menu.action.attack_now")}
+                  </div>
+                  <div class="rounded-lg px-3 py-2 text-slate-200">
+                    ${translateText("context_menu.action.build")}
+                    <span class="float-right text-slate-400">›</span>
+                  </div>
+                  <div class="pt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-300">
+                    ${translateText("context_menu.group.diplomacy")}
+                  </div>
+                  <div class="rounded-lg px-3 py-2 text-slate-200">
+                    ${translateText("context_menu.action.alliance_request")}
+                  </div>
+                  <div class="pt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-300">
+                    ${translateText("context_menu.group.resources")}
+                  </div>
+                  <div class="rounded-lg px-3 py-2 text-slate-500">
+                    ${translateText("context_menu.action.donate_gold")}
+                    <span class="mt-1 block text-[10px] text-amber-300/80">
+                      ${translateText("common.disabled")}
+                    </span>
+                  </div>
+                </div>
               </div>
               <div class="text-white/70 text-sm">
                 <p class="mb-4 leading-relaxed">
-                  ${translateText("help_modal.radial_desc")}
+                  ${translateText("help_modal.context_menu_desc")}
                 </p>
                 <ul class="space-y-3">
                   <li class="flex items-center gap-3">
                     <img
                       src=${assetUrl("images/BuildIconWhite.svg")}
+                      alt=""
                       class="w-8 h-8 scale-75 origin-left"
                     />
-                    <span>${translateText("help_modal.radial_build")}</span>
-                  </li>
-                  <li class="flex items-center gap-3">
-                    <img
-                      src=${assetUrl("images/InfoIcon.svg")}
-                      class="w-8 h-8 scale-75 origin-left"
-                    />
-                    <span>${translateText("help_modal.radial_info")}</span>
+                    <span>${translateText("help_modal.context_menu_build")}</span>
                   </li>
                   <li class="flex items-center gap-3">
                     <img
                       src=${assetUrl("images/BoatIconWhite.svg")}
+                      alt=""
                       class="w-8 h-8 scale-75 origin-left"
                     />
-                    <span>${translateText("help_modal.radial_boat")}</span>
+                    <span>${translateText("help_modal.context_menu_boat")}</span>
                   </li>
                   <li class="flex items-center gap-3">
                     <img
                       src=${assetUrl("images/AllianceIconWhite.svg")}
+                      alt=""
                       class="w-8 h-8 scale-75 origin-left"
                     />
-                    <span>${translateText("help_modal.info_alliance")}</span>
-                  </li>
-                  <li class="flex items-center gap-3">
-                    <img
-                      src=${assetUrl("images/TraitorIconWhite.svg")}
-                      class="w-8 h-8 scale-75 origin-left"
-                    />
-                    <span>${translateText("help_modal.ally_betray")}</span>
+                    <span>${translateText("help_modal.context_menu_diplomacy")}</span>
                   </li>
                   <li class="flex items-center gap-3">
                     <img
                       src=${assetUrl("images/DonateTroopIconWhite.svg")}
+                      alt=""
                       class="w-8 h-8 scale-75 origin-left"
                     />
-                    <span
-                      >${translateText("help_modal.radial_donate_troops")}</span
-                    >
+                    <span>${translateText("help_modal.context_menu_resources")}</span>
                   </li>
                   <li class="flex items-center gap-3">
-                    <img
-                      src=${assetUrl("images/DonateGoldIconWhite.svg")}
-                      class="w-8 h-8 scale-75 origin-left"
-                    />
-                    <span
-                      >${translateText("help_modal.radial_donate_gold")}</span
-                    >
+                    <span class="w-8 shrink-0 text-center font-mono text-cyan-200">↑ ↓</span>
+                    <span>${translateText("help_modal.context_menu_keyboard")}</span>
                   </li>
                 </ul>
               </div>

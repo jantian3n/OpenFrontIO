@@ -1,27 +1,18 @@
-import { assetUrl } from "../../../core/AssetUrls";
 import { EventBus } from "../../../core/EventBus";
 import { PlayerActions } from "../../../core/game/Game";
 import { TileRef } from "../../../core/game/GameMap";
 import { Controller } from "../../Controller";
+import { ContextMenuEvent } from "../../InputHandler";
 import { TransformHandler } from "../../TransformHandler";
 import { UIState } from "../../UIState";
 import { GameView, PlayerView } from "../../view";
 import { BuildMenu } from "./BuildMenu";
 import { ChatIntegration } from "./ChatIntegration";
+import { MenuElementParams, rootMenuElement } from "./ContextMenuElements";
 import { EmojiTable } from "./EmojiTable";
 import { PlayerActionHandler } from "./PlayerActionHandler";
 import { PlayerPanel } from "./PlayerPanel";
-import { RadialMenu, RadialMenuConfig } from "./RadialMenu";
-import {
-  centerButtonElement,
-  COLORS,
-  MenuElementParams,
-  rootMenuElement,
-} from "./RadialMenuElements";
-const donateTroopIcon = assetUrl("images/DonateTroopIconWhite.svg");
-const swordIcon = assetUrl("images/SwordIconWhite.svg");
-
-import { ContextMenuEvent } from "../../InputHandler";
+import { CloseContextMenuEvent, TextContextMenu } from "./TextContextMenu";
 
 function emptyPlayerActions(): PlayerActions {
   return {
@@ -31,8 +22,8 @@ function emptyPlayerActions(): PlayerActions {
   };
 }
 
-export class MainRadialMenu implements Controller {
-  private radialMenu: RadialMenu;
+export class MainContextMenu implements Controller {
+  private contextMenu: TextContextMenu;
 
   private playerActionHandler: PlayerActionHandler;
   private chatIntegration: ChatIntegration;
@@ -52,25 +43,7 @@ export class MainRadialMenu implements Controller {
     private uiState: UIState,
     private playerPanel: PlayerPanel,
   ) {
-    const menuConfig: RadialMenuConfig = {
-      centerButtonIcon: swordIcon,
-      tooltipStyle: `
-        .radial-tooltip .cost {
-          margin-top: 4px;
-          color: ${COLORS.tooltip.cost};
-        }
-        .radial-tooltip .count {
-          color: ${COLORS.tooltip.count};
-        }
-      `,
-    };
-
-    this.radialMenu = new RadialMenu(
-      this.eventBus,
-      rootMenuElement,
-      centerButtonElement,
-      menuConfig,
-    );
+    this.contextMenu = new TextContextMenu(this.eventBus, rootMenuElement);
 
     this.playerActionHandler = new PlayerActionHandler(
       this.eventBus,
@@ -81,7 +54,7 @@ export class MainRadialMenu implements Controller {
   }
 
   init() {
-    this.radialMenu.init();
+    this.contextMenu.init();
     this.eventBus.on(ContextMenuEvent, (event) => {
       const worldCoords = this.transformHandler.screenToWorldCoordinates(
         event.x,
@@ -93,7 +66,7 @@ export class MainRadialMenu implements Controller {
       const clickedTile = this.game.ref(worldCoords.x, worldCoords.y);
       this.clickedTile = clickedTile;
 
-      // Spectators (replay, dead, pre-spawn): skip the action radial and open
+      // Spectators (replay, dead, pre-spawn): skip actions and open
       // the read-only PlayerPanel directly when right-clicking on a player.
       if (this.game.isSpectator()) {
         if (this.game.owner(clickedTile).isPlayer()) {
@@ -116,7 +89,7 @@ export class MainRadialMenu implements Controller {
           );
         })
         .catch((error) => {
-          console.warn("Failed to load radial menu actions:", error);
+          console.warn("Failed to load context menu actions:", error);
         });
     });
   }
@@ -153,29 +126,16 @@ export class MainRadialMenu implements Controller {
       eventBus: this.eventBus,
     };
 
-    const isFriendlyTarget =
-      recipient !== null &&
-      recipient.isFriendly(myPlayer) &&
-      !recipient.isDisconnected();
-
-    this.radialMenu.setCenterButtonAppearance(
-      isFriendlyTarget ? donateTroopIcon : swordIcon,
-      isFriendlyTarget ? "#22d3ee" : "#0f2744",
-      isFriendlyTarget
-        ? this.radialMenu.getDefaultCenterIconSize() * 0.75
-        : this.radialMenu.getDefaultCenterIconSize(),
-    );
-
-    this.radialMenu.setParams(params);
+    this.contextMenu.setParams(params);
     if (screenX !== null && screenY !== null) {
-      this.radialMenu.showRadialMenu(screenX, screenY);
+      this.contextMenu.show(screenX, screenY);
     } else {
-      this.radialMenu.refresh();
+      this.contextMenu.refresh();
     }
   }
 
   async tick() {
-    if (!this.radialMenu.isMenuVisible() || this.clickedTile === null) return;
+    if (!this.contextMenu.isVisible() || this.clickedTile === null) return;
     const myPlayer = this.game.myPlayer();
     if (myPlayer === null) return;
     const tile = this.clickedTile;
@@ -185,14 +145,13 @@ export class MainRadialMenu implements Controller {
         this.updatePlayerActions(myPlayer, actions, tile);
       })
       .catch((error) => {
-        console.warn("Failed to refresh radial menu actions:", error);
+        console.warn("Failed to refresh context menu actions:", error);
       });
   }
 
   closeMenu() {
-    if (this.radialMenu.isMenuVisible()) {
-      this.radialMenu.hideRadialMenu();
-    }
+    if (this.contextMenu.isVisible()) this.contextMenu.hide();
+    this.eventBus.emit(new CloseContextMenuEvent());
 
     if (this.buildMenu.isVisible) {
       this.buildMenu.hideMenu();

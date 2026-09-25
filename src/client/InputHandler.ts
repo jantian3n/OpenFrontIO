@@ -966,8 +966,8 @@ export class InputHandler {
       if (
         !this.userSettings.leftClickOpensMenu() ||
         event.shiftKey ||
-        this.gameView.inSpawnPhase() || // No Radial Menu during spawn phase, only spawn point selection
-        this.uiState.ghostStructure !== null // Block radial menu on left click if building
+        this.gameView.inSpawnPhase() || // Left-click selects the spawn point during spawn.
+        this.uiState.ghostStructure !== null // Block the context menu while placing a structure.
       ) {
         this.eventBus.emit(new MouseUpEvent(event.x, event.y));
       } else {

@@ -6,7 +6,7 @@ import {
   MenuElementParams,
   rootMenuElement,
   Slot,
-} from "../../../src/client/hud/layers/RadialMenuElements";
+} from "../../../src/client/hud/layers/ContextMenuElements";
 import { BuildUnitIntentEvent } from "../../../src/client/Transport";
 import { GameView, PlayerView } from "../../../src/client/view";
 import { UnitType } from "../../../src/core/game/Game";
@@ -80,7 +80,7 @@ vi.mock("dompurify", () => ({
   },
 }));
 
-describe("RadialMenuElements", () => {
+describe("ContextMenuElements", () => {
   let mockParams: MenuElementParams;
   let mockPlayer: PlayerView;
   let mockGame: GameView;
@@ -331,10 +331,12 @@ describe("RadialMenuElements", () => {
       const buildMenu = subMenu.find((item) => item.id === Slot.Build);
       const attackMenu = subMenu.find((item) => item.id === Slot.Attack);
       const deleteMenu = subMenu.find((item) => item.id === Slot.Delete);
+      const mainAction = subMenu.find((item) => item.id === "main_action");
 
       expect(buildMenu).toBeDefined();
       expect(attackMenu).toBeUndefined();
       expect(deleteMenu).toBeDefined();
+      expect(mainAction).toBeDefined();
     });
 
     it("should show attack and boat menu on enemy territory", () => {

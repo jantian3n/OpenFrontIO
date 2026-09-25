@@ -33,7 +33,7 @@ import { GameRightSidebar } from "./layers/GameRightSidebar";
 import { HeadsUpMessage } from "./layers/HeadsUpMessage";
 import { ImmunityTimer } from "./layers/ImmunityTimer";
 import { InGamePromo } from "./layers/InGamePromo";
-import { MainRadialMenu } from "./layers/MainRadialMenu";
+import { MainContextMenu } from "./layers/MainContextMenu";
 import { MultiTabModal } from "./layers/MultiTabModal";
 import { NewLobbyPrompt } from "./layers/NewLobbyPrompt";
 import { PerformanceOverlay } from "./layers/PerformanceOverlay";
@@ -346,7 +346,7 @@ export function createRenderer(
     attacksDisplay,
     chatDisplay,
     buildMenu,
-    new MainRadialMenu(
+    new MainContextMenu(
       eventBus,
       game,
       transformHandler,
