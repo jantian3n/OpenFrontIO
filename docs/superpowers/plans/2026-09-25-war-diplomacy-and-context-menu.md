@@ -634,7 +634,7 @@ Full-suite result: `npm test` did not finish green. The run reproduced the basel
 
 - [x] **Step 4: Review the final diff** with `git diff origin/main...HEAD`, inspect the worktree status, and verify that no resource-request, ally-support, or alternate settlement changes were pulled in.
 
-- [ ] **Step 5: Push the completed branch to GitHub.**
+- [x] **Step 5: Push the completed branch to GitHub.**
 
 ```bash
 git push -u origin codex/war-diplomacy-context-menu
