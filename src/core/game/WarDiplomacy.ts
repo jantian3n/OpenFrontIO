@@ -203,7 +203,7 @@ export class WarDiplomacy {
       return null;
     }
 
-    const subjectSide = this.expandIndependenceSubjectSide(subject);
+    const subjectSide = this.expandIndependenceSubjectSide(subject, overlord);
     const overlordSide = this.expandIndependenceOverlordSide(overlord, subject);
     if (
       !this.canIndependenceSidesFight(
